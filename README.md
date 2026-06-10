@@ -1,4 +1,4 @@
-# 🦅 SIMORGH
+# 🐦‍🔥 SIMORGH
 
 **SIMORGH** is a smart, lightweight, and modern Android connection client designed for connection management, route testing, IP selection, and faster access to reachable network paths.
 
@@ -62,6 +62,6 @@ This version has been optimized through multiple tests before public release and
 
 ---
 
-## 🦅 SIMORGH
+## 🐦‍🔥 SIMORGH
 
 **Simple. Fast. Smart.**
