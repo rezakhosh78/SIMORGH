@@ -64,4 +64,4 @@ This version has been optimized through multiple tests before public release and
 
 ## 🐦‍🔥 SIMORGH
 
-**Simple. Fast. Smart.**
+@pingplas_channel
