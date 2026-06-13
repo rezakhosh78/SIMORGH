@@ -1,6 +1,15 @@
 # 🐦‍🔥 SIMORGH VPN
 
 **SIMORGH VPN** is a multi-engine Android VPN client designed for normal connectivity, restricted networks, Iran national intranet conditions, international internet outages MSP-Engine, XRAY configs, and NipoVPN profiles.
+---
+
+## ⚠️ Donate
+
+USDT BEP20:
+
+```text
+0x304B5D9e118732C98FA60c473A763aD5076FFfb0
+```
 
 This README is based on the latest provided project version:
 
