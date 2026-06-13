@@ -705,6 +705,7 @@ NipoVPN Agent
 
 ```text
 Made By RKh!
+Telegram: @pingplas_channel
 ```
 
 ---
