@@ -41,7 +41,7 @@ SIMORGH has three main pages:
 
 - 🚀 Fast connection through the **Simple** page
 - 🧠 **Advance** mode for Iran national intranet and international internet outage conditions
-- 🧩 Full **NipoVPN ** support
+- 🧩 Full **NipoVPN** support
 - 📥 `nipovpn://` profile import
 - 🧾 Save, select, edit, delete, and export NipoVPN profiles
 - 📡 Real Xray ping for Simple configs
