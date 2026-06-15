@@ -284,7 +284,7 @@ Available routing strategies:
 
 ---
 
-## 3. 🧩 NipoVPN / NIPOVPN
+## 3. 🧩 NipoVPN
 
 The **NipoVPN** page is one of the most important additions in the latest SIMORGH version.
 
