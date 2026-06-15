@@ -32,7 +32,7 @@ SIMORGH has three main pages:
 | Page | Main Purpose |
 |---|---|
 | 🚀 **Simple** | Fast one-click XRAY config connection |
-| 🧠 **Advance** | Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
+| 🧠 **Advance** | MSP-Engine ,Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
 | 🧩 **NipoVPN** | `nipovpn://` profile support powered by the NipoVPN core |
 
 ---
