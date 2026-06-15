@@ -122,7 +122,7 @@ Simple includes a dropdown for **ServerLess**.
 Display name:
 
 ```text
-ServerLess 🇮🇷
+ServerLess(Patterniha) 🇮🇷
 IRAN IPS
 ```
 
