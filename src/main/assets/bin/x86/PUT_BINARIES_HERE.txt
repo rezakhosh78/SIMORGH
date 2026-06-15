@@ -1,4 +1,0 @@
-Place executable native files here for ABI: x86
-Required names:
-- xray
-- tun2socks
