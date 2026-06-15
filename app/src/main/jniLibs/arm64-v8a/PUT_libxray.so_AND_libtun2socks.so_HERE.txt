@@ -1,0 +1,6 @@
+Put REAL executable binaries here BEFORE building APK:
+
+libxray.so       = xray android arm64 binary renamed to libxray.so
+libtun2socks.so  = tun2socks android/linux arm64 binary renamed to libtun2socks.so
+
+If these files are missing, v0.3.7 build intentionally fails so you do not install a broken APK.
