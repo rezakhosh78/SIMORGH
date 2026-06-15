@@ -35,13 +35,37 @@ jobs:
       - name: Install Android SDK packages
         shell: bash
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+
+      - name: Use GitHub Actions safe Gradle memory
+        working-directory: app
+        shell: bash
+        run: |
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8 -XX:+UseParallelGC
+          org.gradle.daemon=true
+          org.gradle.parallel=false
+          org.gradle.caching=true
+          org.gradle.configureondemand=false
+          org.gradle.workers.max=1
+          org.gradle.vfs.watch=false
+
+          android.useAndroidX=true
+          android.enableJetifier=false
+          android.nonTransitiveRClass=true
+          android.nonFinalResIds=false
+
+          kotlin.code.style=official
+          kotlin.compiler.execution.strategy=in-process
+          kotlin.incremental=false
+          kotlin.daemon.useFallbackStrategy=true
+          EOF
+          free -h
 
       - name: Decode release keystore
         shell: bash
@@ -51,8 +75,9 @@ jobs:
       - name: Build signed release APK
         working-directory: app
         shell: bash
+        timeout-minutes: 35
         run: |
-          gradle assembleRelease --no-daemon --stacktrace \
+          gradle assembleRelease --no-daemon --stacktrace --console=plain --info \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/simorgh-release.jks" \
             -Pandroid.injected.signing.store.password="${{ secrets.SIGNING_STORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.SIGNING_KEY_ALIAS }}" \
@@ -78,9 +103,16 @@ jobs:
             TAG="v${VERSION_NAME}"
           fi
 
-          APK_IN="build/outputs/apk/release/app-release.apk"
-          APK_OUT="$GITHUB_WORKSPACE/SIMORGH-v${VERSION_NAME}-arm64-v8.apk"
+          echo "Available APK outputs:"
+          find build/outputs/apk -type f -name "*.apk" -print || true
 
+          APK_IN=$(find build/outputs/apk/release -type f -name "*.apk" | head -1)
+          if [ -z "$APK_IN" ]; then
+            echo "No release APK found under build/outputs/apk/release"
+            exit 1
+          fi
+
+          APK_OUT="$GITHUB_WORKSPACE/SIMORGH-v${VERSION_NAME}-arm64-v8.apk"
           cp "$APK_IN" "$APK_OUT"
 
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
