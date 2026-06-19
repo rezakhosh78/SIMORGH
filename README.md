@@ -1,6 +1,6 @@
 # 🐦‍🔥 SIMORGH VPN
 
-**SIMORGH VPN** is a multi-engine Android VPN client designed for normal connectivity, restricted networks, Iran national intranet conditions, international internet outages MSP-Engine, XRAY configs, and NipoVPN profiles.
+**SIMORGH VPN** is a multi-engine Android VPN client designed for normal connectivity, restricted networks, Iran national intranet conditions, international internet outages RKh-MSP Engine, XRAY configs, and NipoVPN profiles.
 ---
 
 ## ⚠️ Donate
@@ -32,7 +32,7 @@ SIMORGH has three main pages:
 | Page | Main Purpose |
 |---|---|
 | 🚀 **Simple** | Fast one-click XRAY config connection |
-| 🧠 **Advance** | Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
+| 🧠 **Advance** | RKh-MSP Engine ,Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
 | 🧩 **NipoVPN** | `nipovpn://` profile support powered by the NipoVPN core |
 
 ---
@@ -41,7 +41,7 @@ SIMORGH has three main pages:
 
 - 🚀 Fast connection through the **Simple** page
 - 🧠 **Advance** mode for Iran national intranet and international internet outage conditions
-- 🧩 Full **NipoVPN / NIPOVPN** support
+- 🧩 Full **NipoVPN** support
 - 📥 `nipovpn://` profile import
 - 🧾 Save, select, edit, delete, and export NipoVPN profiles
 - 📡 Real Xray ping for Simple configs
@@ -51,7 +51,7 @@ SIMORGH has three main pages:
 - 🧹 **Clear Cache** without deleting configs
 - 📋 Simple config list shown as `Config 1`, `Config 2`, ...
 - 📶 **Ping All** for Simple configs
-- 🇮🇷 **ServerLess 🇮🇷 / IRAN IPS** mode
+- 🇮🇷 **ServerLess (Patterniha)🇮🇷 / IRAN IPS** mode
 - 🌐 Google DNS for Simple Normal mode
 - 🧠 Health and latency cache
 - 📶 Background ping refresh after connection
@@ -122,7 +122,7 @@ Simple includes a dropdown for **ServerLess**.
 Display name:
 
 ```text
-ServerLess 🇮🇷
+ServerLess(Patterniha) 🇮🇷
 IRAN IPS
 ```
 
@@ -284,7 +284,7 @@ Available routing strategies:
 
 ---
 
-## 3. 🧩 NipoVPN / NIPOVPN
+## 3. 🧩 NipoVPN
 
 The **NipoVPN** page is one of the most important additions in the latest SIMORGH version.
 
