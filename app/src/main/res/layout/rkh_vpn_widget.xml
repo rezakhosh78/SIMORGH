@@ -1,4 +1,0 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:orientation="vertical" android:padding="14dp" android:background="@drawable/widget_bg" android:layout_width="match_parent" android:layout_height="match_parent">
- <TextView android:text="SIMORGH Private" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="18sp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
- <TextView android:id="@+id/widget_status" android:text="Tap to open" android:textColor="#FFB36B" android:textSize="13sp" android:layout_width="match_parent" android:layout_height="wrap_content"/>
-</LinearLayout>
