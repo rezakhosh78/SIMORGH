@@ -295,15 +295,20 @@ class RkhVpnService : VpnService() {
         notificationThread = thread(name = "RKhVPN-notification-speed") {
             var lastRx = TrafficStats.getTotalRxBytes().coerceAtLeast(0L)
             var lastTx = TrafficStats.getTotalTxBytes().coerceAtLeast(0L)
+            var lastAt = System.currentTimeMillis()
+            val updateIntervalMs = if (simpleMode || nipoMode) 3_000L else 2_500L
             while (running) {
                 try {
-                    Thread.sleep(1000)
+                    Thread.sleep(updateIntervalMs)
+                    val now = System.currentTimeMillis()
+                    val elapsedSeconds = ((now - lastAt).coerceAtLeast(1000L)) / 1000L
                     val rx = TrafficStats.getTotalRxBytes().coerceAtLeast(0L)
                     val tx = TrafficStats.getTotalTxBytes().coerceAtLeast(0L)
-                    val down = ((rx - lastRx).coerceAtLeast(0L) * 8L) / 1000L
-                    val up = ((tx - lastTx).coerceAtLeast(0L) * 8L) / 1000L
+                    val down = (((rx - lastRx).coerceAtLeast(0L) * 8L) / 1000L) / elapsedSeconds
+                    val up = (((tx - lastTx).coerceAtLeast(0L) * 8L) / 1000L) / elapsedSeconds
                     lastRx = rx
                     lastTx = tx
+                    lastAt = now
                     if (simpleMode) {
                         val editor = publicPrefs?.edit()
                             ?.putLong("downloadKbps", down)

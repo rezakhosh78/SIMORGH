@@ -20,13 +20,13 @@ class ProcessCoreManager(private val context: Context) {
     fun startXray(configJson: String, inheritedTunFdNumber: Int? = null): Int {
         val xray = bin.prepare("xray")
         val workDir = File(context.filesDir, "xray-bin-runtime").apply { mkdirs() }
-        ensureXrayGeoAssets(workDir)
         val configFile = File(workDir, "config.json").apply { writeText(configJson) }
+        val assetDir = prepareXrayAssetDir(configJson, workDir)
         val cmd = listOf(xray.absolutePath, "run", "-config", configFile.absolutePath)
         log("Starting Xray binary: ${cmd.joinToString(" ")}")
         val xrayEnv = linkedMapOf(
-            "XRAY_LOCATION_ASSET" to workDir.absolutePath,
-            "V2RAY_LOCATION_ASSET" to workDir.absolutePath
+            "XRAY_LOCATION_ASSET" to assetDir.absolutePath,
+            "V2RAY_LOCATION_ASSET" to assetDir.absolutePath
         )
         xrayProcess = if (inheritedTunFdNumber != null) {
             // Android's ProcessBuilder does not reliably expose arbitrary inherited fd
@@ -55,9 +55,27 @@ class ProcessCoreManager(private val context: Context) {
         return socksPort
     }
 
-    private fun ensureXrayGeoAssets(workDir: File) {
+    private fun prepareXrayAssetDir(configJson: String, fallbackDir: File): File {
+        if (!configJson.contains("geosite:") && !configJson.contains("geoip:")) {
+            runCatching { File(fallbackDir, "geosite.dat").delete() }
+            runCatching { File(fallbackDir, "geoip.dat").delete() }
+            log("Xray geo assets not needed for this config; using lightweight runtime asset dir")
+            return fallbackDir
+        }
+        return File(context.filesDir, "xray-assets").apply {
+            mkdirs()
+            ensureXrayGeoAssets(this)
+            log("Xray shared asset env prepared: XRAY_LOCATION_ASSET=${absolutePath}")
+        }
+    }
+
+    private fun ensureXrayGeoAssets(assetDir: File) {
         listOf("geosite.dat", "geoip.dat").forEach { assetName ->
-            val outFile = File(workDir, assetName)
+            val outFile = File(assetDir, assetName)
+            if (outFile.exists() && outFile.length() > 1024L) {
+                log("Xray shared geo asset reused: ${outFile.absolutePath} (${outFile.length()} bytes)")
+                return@forEach
+            }
             val copied = runCatching {
                 context.assets.open("xray/$assetName").use { input ->
                     outFile.outputStream().use { output -> input.copyTo(output) }
@@ -68,10 +86,9 @@ class ProcessCoreManager(private val context: Context) {
                 false
             }
             if (copied) {
-                log("Xray geo asset ready: ${outFile.absolutePath} (${outFile.length()} bytes)")
+                log("Xray shared geo asset ready: ${outFile.absolutePath} (${outFile.length()} bytes)")
             }
         }
-        log("Xray asset env prepared: XRAY_LOCATION_ASSET=${workDir.absolutePath}")
     }
 
     fun startTun2Socks(tunFd: Int, socksPort: Int) {
@@ -301,6 +318,13 @@ class ProcessCoreManager(private val context: Context) {
         tun2socksProcess = null
         xrayProcess = null
         nipoProcess = null
+        cleanupSharedGeoAssets()
+    }
+
+    private fun cleanupSharedGeoAssets() {
+        runCatching { File(context.filesDir, "xray-assets").deleteRecursively() }
+        runCatching { File(context.filesDir, "xray-bin-runtime/geosite.dat").delete() }
+        runCatching { File(context.filesDir, "xray-bin-runtime/geoip.dat").delete() }
     }
 
     private fun pump(tag: String, process: Process) {

@@ -70,6 +70,120 @@ object XrayBinaryConfigBuilder {
         return base.toString(2)
     }
 
+
+    fun hiddifyLikeBalancedSocksConfigFromRawList(raws: List<String>, socksPort: Int = 10808, forceGoogleDns: Boolean = true): String {
+        // Hiddify-like Simple normal mode: one Xray process, one local mixed/SOCKS inbound,
+        // many proxy outbounds, and Xray's own routing balancer + observatory chooses the path.
+        // This removes the old app-side loop of starting Xray repeatedly for each config.
+        val proxyOutbounds = JSONArray()
+        raws.forEachIndexed { index, raw ->
+            val clean = raw.replace("﻿", "").trim()
+            if (clean.isBlank() || clean.startsWith("{")) return@forEachIndexed
+            val parsed = runCatching { JSONObject(XrayConfigBuilder.configFromRaw(clean)) }.getOrNull() ?: return@forEachIndexed
+            val outs = parsed.optJSONArray("outbounds") ?: return@forEachIndexed
+            var proxy: JSONObject? = null
+            for (i in 0 until outs.length()) {
+                val item = outs.optJSONObject(i) ?: continue
+                if (item.optString("tag", "").equals("proxy", ignoreCase = true)) {
+                    proxy = JSONObject(item.toString())
+                    break
+                }
+            }
+            if (proxy == null) proxy = outs.optJSONObject(0)?.let { JSONObject(it.toString()) }
+            val outbound = proxy ?: return@forEachIndexed
+            outbound.put("tag", "proxy-$index")
+            proxyOutbounds.put(outbound)
+        }
+        if (proxyOutbounds.length() == 0) error("No valid Simple configs for balancer")
+
+        val socksInbound = JSONObject().apply {
+            put("tag", "socks-in")
+            put("listen", "127.0.0.1")
+            put("port", socksPort)
+            put("protocol", "socks")
+            put("settings", JSONObject().apply {
+                put("udp", true)
+                put("auth", "noauth")
+            })
+            put("sniffing", JSONObject().apply {
+                put("enabled", true)
+                put("destOverride", JSONArray(listOf("fakedns", "http", "tls", "quic")))
+                put("routeOnly", false)
+            })
+        }
+
+        val httpInbound = JSONObject().apply {
+            put("tag", "http-in")
+            put("listen", "127.0.0.1")
+            put("port", socksPort + 1)
+            put("protocol", "http")
+            put("settings", JSONObject())
+        }
+
+        val outbounds = JSONArray()
+        for (i in 0 until proxyOutbounds.length()) outbounds.put(proxyOutbounds.getJSONObject(i))
+        outbounds.put(JSONObject().apply { put("tag", "direct"); put("protocol", "freedom") })
+        outbounds.put(JSONObject().apply { put("tag", "block"); put("protocol", "blackhole") })
+
+        return JSONObject().apply {
+            put("log", JSONObject().apply { put("loglevel", "info") })
+            put("dns", JSONObject().apply {
+                put("servers", JSONArray(listOf("8.8.8.8", "8.8.4.4", "1.1.1.1")))
+                put("queryStrategy", "UseIPv4")
+                put("useSystemHosts", false)
+                put("disableCache", false)
+            })
+            put("stats", JSONObject())
+            put("policy", JSONObject().apply {
+                put("levels", JSONObject().apply {
+                    put("0", JSONObject().apply {
+                        put("statsUserUplink", true)
+                        put("statsUserDownlink", true)
+                    })
+                })
+                put("system", JSONObject().apply {
+                    put("statsOutboundUplink", true)
+                    put("statsOutboundDownlink", true)
+                })
+            })
+            put("observatory", JSONObject().apply {
+                put("subjectSelector", JSONArray(listOf("proxy-")))
+                put("probeUrl", "https://www.gstatic.com/generate_204")
+                put("probeInterval", "10s")
+            })
+            put("inbounds", JSONArray().put(socksInbound).put(httpInbound))
+            put("outbounds", outbounds)
+            put("routing", JSONObject().apply {
+                put("domainStrategy", "IPIfNonMatch")
+                put("rules", JSONArray()
+                    .put(JSONObject().apply {
+                        put("type", "field")
+                        put("outboundTag", "direct")
+                        put("network", "udp")
+                        put("port", 53)
+                    })
+                    .put(JSONObject().apply {
+                        put("type", "field")
+                        put("outboundTag", "block")
+                        put("network", "udp")
+                        put("port", "443")
+                    })
+                    .put(JSONObject().apply {
+                        put("type", "field")
+                        put("balancerTag", "simple-hiddify-balancer")
+                        put("network", "tcp,udp")
+                    })
+                )
+                put("balancers", JSONArray().put(JSONObject().apply {
+                    put("tag", "simple-hiddify-balancer")
+                    put("selector", JSONArray(listOf("proxy-")))
+                    put("fallbackTag", "proxy-0")
+                    put("strategy", JSONObject().apply { put("type", "leastPing") })
+                }))
+            })
+        }.toString(2)
+    }
+
     fun serverLessTunConfigFromRaw(raw: String): String {
         // ServerLess works in v2rayNG with the bundled full Xray JSON. For SIMORGH
         // ServerLess mode keep that JSON as close as possible to v2rayNG behavior and

@@ -26,8 +26,8 @@ android {
         applicationId = "com.rkh.simorgh"
         minSdk = 29
         targetSdk = 36
-        versionCode = 12345
-        versionName = "1.1.23.45"
+        versionCode = 12346
+        versionName = "v1.1.23.46"
     }
 
     packaging {

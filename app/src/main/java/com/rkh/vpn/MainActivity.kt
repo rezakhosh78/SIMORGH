@@ -111,9 +111,9 @@ class MainActivity : ComponentActivity() {
                 },
                 onSimpleConnect = {
                     val simple = publicVm.state.value
-                    if (simple.simpleConnected || simple.simpleConnecting) {
+                    if (simple.simpleConnected) {
                         publicVm.simpleDisconnect()
-                    } else {
+                    } else if (!simple.simpleConnecting) {
                         publicVm.prepareSimpleConnectUi()
                         requestVpn(PendingVpnMode.SIMPLE)
                     }

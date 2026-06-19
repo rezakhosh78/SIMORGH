@@ -1011,8 +1011,8 @@ class SimorghPublicVpnService : VpnService() {
                         var replacement: Pair<String, Long>? = null
                         val others = pool.filter { it != active }
                         val healthBatch = if (activeOk && others.isNotEmpty()) {
-                            val start = Math.floorMod(healthCursor.getAndAdd(32), others.size)
-                            List(min(32, others.size)) { offset -> others[(start + offset) % others.size] }
+                            val start = Math.floorMod(healthCursor.getAndAdd(8), others.size)
+                            List(min(8, others.size)) { offset -> others[(start + offset) % others.size] }
                         } else {
                             orderedCleanCandidates().filter { it != active }
                         }
@@ -1029,7 +1029,7 @@ class SimorghPublicVpnService : VpnService() {
                             setActiveCleanIp(ip, ping)
                             log("[MSP SOCKS5] replacement clean IP selected by route watchdog -> $ip • ${ping}ms")
                         }
-                        Thread.sleep(2000)
+                        Thread.sleep(10_000)
                     } catch (_: InterruptedException) {
                         break
                     } catch (t: Throwable) {
@@ -1521,13 +1521,17 @@ class SimorghPublicVpnService : VpnService() {
 
     private fun startNotificationSpeedLoop() {
         speedThread = thread(name = "SIMORGH-public-speed") {
+            var lastAt = System.currentTimeMillis()
             while (running) {
                 try {
-                    Thread.sleep(1000)
+                    Thread.sleep(3_000)
+                    val now = System.currentTimeMillis()
+                    val elapsedSeconds = ((now - lastAt).coerceAtLeast(1000L)) / 1000L
+                    lastAt = now
                     // Live Speed is now measured from bytes actually relayed by SIMORGH SOCKS5,
                     // not from total phone TrafficStats. This keeps the graph from showing unrelated app traffic.
-                    val down = (proxyDownloadBytes.getAndSet(0L).coerceAtLeast(0L) * 8L) / 1000L
-                    val up = (proxyUploadBytes.getAndSet(0L).coerceAtLeast(0L) * 8L) / 1000L
+                    val down = ((proxyDownloadBytes.getAndSet(0L).coerceAtLeast(0L) * 8L) / 1000L) / elapsedSeconds
+                    val up = ((proxyUploadBytes.getAndSet(0L).coerceAtLeast(0L) * 8L) / 1000L) / elapsedSeconds
                     prefs.edit().putLong("downloadKbps", down).putLong("uploadKbps", up).apply()
                     val label = prefs.getString("status", "RKh-MSP").orEmpty().take(36)
                     startForeground(2001, NotificationHelper.publicVpn(this, "SIMORGH", "$label • ↓ ${FormatUtils.kbps(down)}  ↑ ${FormatUtils.kbps(up)}", connected = true))

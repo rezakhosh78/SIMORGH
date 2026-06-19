@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.TrafficStats
+import android.os.Build
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -15,6 +16,7 @@ import com.rkh.vpn.data.SimorghPublicState
 import com.rkh.vpn.data.SimorghRoute
 import com.rkh.vpn.core.NativeBinaryManager
 import com.rkh.vpn.core.PingEngine
+import com.rkh.vpn.core.XrayBinaryConfigBuilder
 import com.rkh.vpn.data.ServerConfig
 import com.rkh.vpn.data.SimpleConfigUiItem
 import com.rkh.vpn.data.SubscriptionRepository
@@ -26,6 +28,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,12 +38,14 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.joinAll
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import java.net.ServerSocket
 import java.util.Locale
 import org.json.JSONArray
@@ -53,7 +58,7 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("simorgh_public_state", Context.MODE_PRIVATE)
     private val simpleRepo = SubscriptionRepository()
     private val simplePing = PingEngine(app)
-    private val simpleSubscriptionUrl = "https://subsimorgh.salam783.workers.dev"
+    private val simpleSubscriptionUrl: String get() = decodeHiddenSimpleSubscriptionUrl()
     private val simpleServerlessAssetName = "serverless.json"
     private val simpleServerlessDisplayName = "ServerLess 🇮🇷"
     private val simpleServerlessDescription = "IRAN IPS"
@@ -63,9 +68,11 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<SimorghPublicState> = _state
     private var syncJob: Job? = null
     private var simpleBackgroundLatencyJob: Job? = null
+    private var simpleHealthyScanJob: Job? = null
 
     init {
         ensureDefaults()
+        cleanupAppRuntimeCache()
         syncManualIpsIntoCleanMemory()
         _state.value = loadState()
         log("Public ViewModel initialized • ISP options=${ispOptions.size} • SNI options=${sniOptions.size}")
@@ -137,19 +144,36 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
 
     fun disconnect() {
         log("Disconnect requested from Public UI")
-        val intent = Intent(getApplication(), SimorghPublicVpnService::class.java)
+        simpleHealthyScanJob?.cancel()
+        simpleHealthyScanJob = null
+        simpleBackgroundLatencyJob?.cancel()
+        simpleBackgroundLatencyJob = null
+        val app = getApplication<Application>()
+        val intent = Intent(app, SimorghPublicVpnService::class.java)
             .setAction(SimorghPublicVpnService.ACTION_STOP)
         runCatching {
-            getApplication<Application>().startService(intent)
+            app.startService(intent)
         }.onFailure {
             log("Failed to send Public stop intent", it)
+        }
+        val simpleIntent = Intent(app, RkhVpnService::class.java)
+            .setAction(RkhVpnService.ACTION_STOP)
+        runCatching {
+            app.startService(simpleIntent)
+        }.onFailure {
+            log("Failed to send Simple core stop intent", it)
         }
         prefs.edit()
             .putBoolean("connecting", false)
             .putBoolean("connected", false)
+            .putBoolean("simpleConnecting", false)
+            .putBoolean("simpleConnected", false)
+            .putString("simpleStatus", "Simple XRAY disconnected")
             .putString("status", "Disconnected")
             .putString("activeMode", "idle")
             .putLong("startedAt", 0L)
+            .putLong("downloadKbps", 0L)
+            .putLong("uploadKbps", 0L)
             .apply()
         _state.value = loadState()
     }
@@ -355,6 +379,8 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearSimpleCache() {
+        simpleHealthyScanJob?.cancel()
+        simpleHealthyScanJob = null
         simpleBackgroundLatencyJob?.cancel()
         val serverless = prefs.getBoolean("simpleServerlessEnabled", false)
         val configCount = loadSimpleConfigs(serverless).size
@@ -379,7 +405,9 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = loadState()
     }
 
-    fun pingAllSimpleConfigs() = viewModelScope.launch {
+    fun pingAllSimpleConfigs() {
+        simpleHealthyScanJob?.cancel()
+        simpleHealthyScanJob = viewModelScope.launch {
         val serverless = prefs.getBoolean("simpleServerlessEnabled", false)
         var configs = loadSimpleConfigs(serverless)
         if (configs.isEmpty()) configs = updateSimpleSubscriptionInternal(showReady = false)
@@ -403,8 +431,8 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
             .remove("simpleBestRawHash")
             .putString("simpleBestName", "")
             .putLong("simpleBestPingMs", -1L)
-            .putString("simpleStatus", "Ping All started • ${configs.size} configs • 20 parallel • fresh 3x Xray ping")
-            .putString("status", "Ping All started")
+            .putString("simpleStatus", "Ping All started • ${configs.size} configs • real Xray test • $SIMPLE_FAST_PROBE_PARALLELISM parallel")
+            .putString("status", "Real Xray testing")
             .apply()
         _state.value = loadState()
         val tested = pingSimpleConfigsParallel(configs, parallelism = 20, statusPrefix = "Ping All")
@@ -432,6 +460,7 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
             log("Simple Ping All finished: best=$label • ${ping}ms • tested=${tested.size}")
         }
         _state.value = loadState()
+        }
     }
 
     fun setSimpleServerlessEnabled(enabled: Boolean) {
@@ -450,11 +479,12 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
 
     fun prepareSimpleConnectUi() {
         val startedAt = System.currentTimeMillis()
+        resetSimpleHealthyMemory()
         prefs.edit()
             .putBoolean("simpleConnecting", true)
             .putBoolean("simpleConnected", false)
-            .putString("simpleStatus", "Searching and Ping...")
-            .putString("status", "Searching and Ping...")
+            .putString("simpleStatus", "Starting Simple Balancer...")
+            .putString("status", "Simple Balancer starting")
             .putString("simpleBestName", "")
             .putLong("simpleBestPingMs", -1L)
             .putBoolean("connecting", false)
@@ -466,16 +496,21 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun simpleConnectAfterPermission() {
-        viewModelScope.launch {
+        if (simpleHealthyScanJob?.isActive == true) {
+            log("Simple connect ignored: connect job already running")
+            return
+        }
+        simpleHealthyScanJob = viewModelScope.launch {
             try {
                 val app = getApplication<Application>()
                 runCatching { app.stopService(Intent(app, SimorghPublicVpnService::class.java)) }
                 val startedAt = System.currentTimeMillis()
+                resetSimpleHealthyMemory()
                 prefs.edit()
                     .putBoolean("simpleConnecting", true)
                     .putBoolean("simpleConnected", false)
-                    .putString("simpleStatus", "Searching and Ping...")
-                    .putString("status", "Searching and Ping...")
+                    .putString("simpleStatus", if (prefs.getBoolean("simpleServerlessEnabled", false)) "Searching and Ping..." else "Starting Simple Balancer...")
+                    .putString("status", if (prefs.getBoolean("simpleServerlessEnabled", false)) "Searching and Ping..." else "Simple Balancer starting")
                     .putString("simpleBestName", "")
                     .putLong("simpleBestPingMs", -1L)
                     .putBoolean("connecting", false)
@@ -490,13 +525,13 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                 _state.value = loadState()
 
                 // First run: if there is no saved config cache yet, load and save it once.
-                // Config bodies stay cached until Update. Each Connect performs a fresh shuffled Xray ping scan.
+                // Config bodies stay cached until Update. Simple normal Connect builds one Xray balancer config.
                 val serverless = prefs.getBoolean("simpleServerlessEnabled", false)
                 var configs = loadSimpleConfigs(serverless)
                 if (configs.isEmpty()) {
                     prefs.edit()
-                        .putString("simpleStatus", "Searching and Ping... • first run load")
-                        .putString("status", "Searching and Ping...")
+                        .putString("simpleStatus", if (serverless) "Searching and Ping... • first run load" else "Loading configs for Simple Balancer...")
+                        .putString("status", if (serverless) "Searching and Ping..." else "Simple Balancer loading")
                         .apply()
                     _state.value = loadState()
                     log("Simple connect first run: no cached configs for ${if (serverless) simpleServerlessDisplayName else "Normal"}, loading config once")
@@ -521,7 +556,7 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                     .putString("status", "Preparing Simple configs")
                     .apply()
                 _state.value = loadState()
-                log("Simple XRAY connect using cached config list and fresh 3x Xray ping scan • mode=${if (prefs.getBoolean("simpleServerlessEnabled", false)) simpleServerlessDisplayName else "Normal"} • configs=${configs.size}")
+                log("Simple XRAY connect using cached configs • mode=${if (prefs.getBoolean("simpleServerlessEnabled", false)) simpleServerlessDisplayName else "Normal Active Balancer"} • configs=${configs.size}")
 
                 if (serverless && configs.size == 1 && configs.first().raw.trim().startsWith("{")) {
                     // ServerLess is restored from stable 1.1.23.37 behavior: quick Xray ping first,
@@ -536,43 +571,42 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                         log("Simple XRAY ServerLess quick ping failed: ${tested.error ?: "unknown"}; retrying full real Xray ping")
                         tested = withContext(Dispatchers.IO) { simplePing.ping(configs.first()) }
                     }
-                    val best = tested.takeIf { it.pingMs != null } ?: configs.first().copy(error = tested.error)
-                    if (best.pingMs == null) {
+                    val best = if (tested.pingMs != null) {
+                        tested.copy(name = simpleServerlessDisplayName)
+                    } else {
+                        // ServerLess JSON can still work even when the external latency endpoint fails.
+                        // Do not block startup on ping failure; start the bundled config directly.
+                        log("Simple XRAY ServerLess ping failed (${tested.error ?: "unknown"}); starting ServerLess config directly")
                         prefs.edit()
-                            .putBoolean("simpleConnecting", false)
-                            .putBoolean("simpleConnected", false)
-                            .putString("simpleStatus", "Simple XRAY: no reachable ServerLess config")
-                            .putString("status", "Simple XRAY: no reachable config")
-                            .putString("activeMode", "idle")
-                            .putLong("startedAt", 0L)
+                            .putString("simpleStatus", "Starting ServerLess... • ping test skipped")
+                            .putString("status", "Starting ServerLess")
                             .apply()
                         _state.value = loadState()
-                        log("Simple XRAY ServerLess: no reachable config after 1.1.23.37-compatible ping")
-                        return@launch
+                        configs.first().copy(name = simpleServerlessDisplayName, pingMs = null, error = null)
                     }
-                    if (!startSelectedSimpleConfig(app, best.copy(name = simpleServerlessDisplayName), 0, startedAt)) return@launch
+                    if (!startSelectedSimpleConfig(app, best, 0, startedAt)) return@launch
                     return@launch
                 }
 
-                // Each Connect starts a fresh shuffled Xray ping scan. Cached pings remain visible in the list,
-                // but they are not trusted for the actual connection decision.
+                // Active Simple balancer: run real Xray URL tests for normal configs, show pings in the list,
+                // connect to the first working config, then move to the latest lowest-ping result.
                 prefs.edit()
-                    .putString("simpleStatus", "Searching SNI google.com... • connecting to first healthy config")
-                    .putString("status", "Searching and Ping...")
+                    .putString("simpleStatus", "Real Xray testing configs... • ${configs.size} configs")
+                    .putString("status", "Real Xray testing")
                     .apply()
                 _state.value = loadState()
-                val connected = connectFromFirstHealthyShuffledBatch(app, configs, startedAt)
+                val connected = connectFromFastHealthyScanner(app, configs, startedAt)
                 if (connected == null) {
                     prefs.edit()
                         .putBoolean("simpleConnecting", false)
                         .putBoolean("simpleConnected", false)
-                        .putString("simpleStatus", "Simple XRAY: no reachable config")
-                        .putString("status", "Simple XRAY: no reachable config")
+                        .putString("simpleStatus", "Simple Balancer: no healthy config")
+                        .putString("status", "Simple Balancer: no healthy config")
                         .putString("activeMode", "idle")
                         .putLong("startedAt", 0L)
                         .apply()
                     _state.value = loadState()
-                    log("Simple XRAY: no reachable config after shuffled latency scan")
+                    log("Simple active balancer: no healthy config after real Xray test")
                     return@launch
                 }
             } catch (e: Throwable) {
@@ -633,27 +667,28 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                 val pending = prefs.getInt("simplePendingConnectIndex", 0).coerceIn(configs.indices)
                 val candidate = configs[pending]
                 prefs.edit()
-                    .putString("simpleStatus", "Testing ${simpleDisplayName(pending)} with 3x Xray ping...")
-                    .putString("status", "Simple XRAY testing selected config")
+                    .putString("simpleStatus", if (serverless) "Testing ${simpleDisplayName(pending)} with Xray ping..." else "Fast testing ${simpleDisplayName(pending)}...")
+                    .putString("status", if (serverless) "Simple XRAY testing selected config" else "Fast testing selected config")
                     .apply()
                 _state.value = loadState()
-                val selected = withContext(Dispatchers.IO) { simplePing.pingStrict3(candidate) }
+                val selected = withContext(Dispatchers.IO) { if (serverless) simplePing.pingStrict3(candidate) else simpleFastProbe(candidate) }
                 val ping = selected.pingMs
-                if (ping == null) {
+                if (ping == null && !serverless) {
                     removeSimpleLatencyResult(candidate)
                     prefs.edit()
                         .putBoolean("simpleConnecting", false)
                         .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                        .putString("simpleStatus", "${simpleDisplayName(pending)} failed 3x Xray ping")
+                        .putString("simpleStatus", "${simpleDisplayName(pending)} failed health test")
                         .putString("status", "Selected config failed")
                         .apply()
-                    log("Simple row connect blocked by failed 3x Xray ping • index=$pending • ${selected.error ?: "unknown"}")
+                    log("Simple row connect blocked by failed health test • index=$pending • ${selected.error ?: "unknown"}")
                     _state.value = loadState()
                     return@launch
                 }
-                saveSimpleLatencyResult(selected, ping)
+                if (ping != null) saveSimpleLatencyResult(selected, ping)
                 val startedAt = System.currentTimeMillis()
-                if (!startSelectedSimpleConfig(app, selected, pending, startedAt)) return@launch
+                val selectedForStart = if (serverless && ping == null) candidate.copy(name = simpleServerlessDisplayName, pingMs = null, error = null) else selected
+                if (!startSelectedSimpleConfig(app, selectedForStart, pending, startedAt)) return@launch
                 if (!serverless) startSimpleBackgroundShuffleScan(configs, "Refreshing pings")
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -675,6 +710,92 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         return configs.mapIndexedNotNull { index, server ->
             cache[server.id]?.let { entry -> index to server.copy(pingMs = entry.pingMs, error = null) }
         }.minByOrNull { it.second.pingMs ?: Long.MAX_VALUE }
+    }
+
+
+    private fun selectSimpleBalancerConfigs(configs: List<ServerConfig>): List<Pair<Int, ServerConfig>> {
+        val cache = loadSimpleLatencyCache()
+        val indexed = configs.withIndex().filter { !it.value.raw.trim().startsWith("{") }
+        if (indexed.isEmpty()) return emptyList()
+        val cached = indexed
+            .filter { cache.containsKey(it.value.id) }
+            .sortedBy { cache[it.value.id]?.pingMs ?: Long.MAX_VALUE }
+        val uncached = indexed
+            .filterNot { cache.containsKey(it.value.id) }
+            .shuffled()
+        return (cached + uncached)
+            .distinctBy { it.value.id }
+            .take(SIMPLE_BALANCER_MAX_OUTBOUNDS)
+            .map { it.index to it.value }
+    }
+
+    private fun startSimpleBalancerConfig(app: Application, selected: List<Pair<Int, ServerConfig>>, startedAt: Long): Boolean {
+        val firstIndex = selected.firstOrNull()?.first ?: 0
+        val label = "Balancer • ${selected.size} configs"
+        val balancedRaw = runCatching {
+            XrayBinaryConfigBuilder.hiddifyLikeBalancedSocksConfigFromRawList(selected.map { it.second.raw }, socksPort = 10808, forceGoogleDns = true)
+        }.getOrElse { e ->
+            prefs.edit()
+                .putBoolean("simpleConnecting", false)
+                .putBoolean("simpleConnected", false)
+                .putString("simpleStatus", "Simple Balancer build failed: ${e.message ?: e.javaClass.simpleName}")
+                .putString("status", "Simple Balancer build failed")
+                .putString("activeMode", "idle")
+                .putLong("startedAt", 0L)
+                .apply()
+            log("Simple Hiddify-like balancer config build failed", e)
+            _state.value = loadState()
+            return false
+        }
+
+        prefs.edit()
+            .putString("simpleBestName", label)
+            .putString("simpleBestId", "simple-hiddify-balancer")
+            .putInt("simpleBestIndex", firstIndex)
+            .putInt("simpleBestRawHash", balancedRaw.hashCode())
+            .putLong("simpleBestPingMs", -1L)
+            .putString("simpleStatus", "Simple Balancer connecting • ${selected.size} configs")
+            .putString("status", "Simple Balancer connecting")
+            .putString("activeMode", "simple_xray")
+            .putLong("startedAt", startedAt)
+            .putLong("simpleLastTrafficAt", startedAt)
+            .putBoolean("simpleHadTraffic", false)
+            .apply()
+        _state.value = loadState()
+        log("Simple Hiddify-like balancer selected • outbounds=${selected.size} • firstIndex=$firstIndex • rawChars=${balancedRaw.length}")
+
+        val intent = Intent(app, RkhVpnService::class.java)
+            .setAction(RkhVpnService.ACTION_START)
+            .putExtra(RkhVpnService.EXTRA_RAW_CONFIG, balancedRaw)
+            .putExtra(RkhVpnService.EXTRA_SERVER_NAME, "SIMORGH Simple • Hiddify Balancer")
+        val result = safeStartCoreService(app, intent)
+        result.onFailure { e ->
+            prefs.edit()
+                .putBoolean("simpleConnecting", false)
+                .putBoolean("simpleConnected", false)
+                .putString("simpleStatus", "Simple Balancer start failed: ${e.message ?: e.javaClass.simpleName}")
+                .putString("status", "Simple Balancer start failed")
+                .putString("activeMode", "idle")
+                .putLong("startedAt", 0L)
+                .apply()
+            log("Simple Hiddify-like balancer service start failed", e)
+            _state.value = loadState()
+        }
+        if (result.isFailure) return false
+        prefs.edit()
+            .putBoolean("simpleConnecting", false)
+            .putBoolean("simpleConnected", true)
+            .putString("simpleStatus", "Simple Balancer connected • ${selected.size} configs")
+            .putString("status", "Simple Balancer connected")
+            .putString("activeMode", "simple_xray")
+            .putLong("startedAt", startedAt)
+            .apply()
+        _state.value = loadState()
+        return true
+    }
+
+    private fun safeStartCoreService(app: Application, intent: Intent): Result<android.content.ComponentName?> = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) app.startForegroundService(intent) else app.startService(intent)
     }
 
     private fun startSelectedSimpleConfig(app: Application, best: ServerConfig, bestIndex: Int, startedAt: Long): Boolean {
@@ -703,7 +824,7 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
             .setAction(RkhVpnService.ACTION_START)
             .putExtra(RkhVpnService.EXTRA_RAW_CONFIG, best.raw)
             .putExtra(RkhVpnService.EXTRA_SERVER_NAME, "SIMORGH Simple • $bestLabel")
-        val result = runCatching { app.startForegroundService(intent) }
+        val result = safeStartCoreService(app, intent)
         result.onFailure { e ->
             prefs.edit()
                 .putBoolean("simpleConnecting", false)
@@ -734,300 +855,161 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    private suspend fun connectFromFirstHealthyShuffledBatch(app: Application, configs: List<ServerConfig>, startedAt: Long): Pair<Int, ServerConfig>? = coroutineScope {
-        val safeParallelism = 20.coerceAtMost(configs.size.coerceAtLeast(1))
-        val total = configs.size
-        val order = configs.withIndex().toList().shuffled()
-        val next = AtomicInteger(0)
-        val results = ArrayList<Pair<Int, ServerConfig>>(total)
-        val sniHealthy = ArrayList<Pair<Int, ServerConfig>>(SIMPLE_CONNECT_MIN_SNI_HEALTHY)
+    private suspend fun connectFromFastHealthyScanner(app: Application, configs: List<ServerConfig>, startedAt: Long): Pair<Int, ServerConfig>? = coroutineScope {
+        val candidates = configs.withIndex().filter { !it.value.raw.trim().startsWith("{") }.shuffled()
+        if (candidates.isEmpty()) return@coroutineScope null
+        val total = candidates.size
         val latencyCache = loadSimpleLatencyCache().toMutableMap()
-        val resultChannel = Channel<Pair<Int, ServerConfig>>(Channel.UNLIMITED)
+        val healthy = ArrayList<Pair<Int, ServerConfig>>()
         var connected: Pair<Int, ServerConfig>? = null
+        var done = 0
 
-        val workers = List(safeParallelism) {
-            launch(Dispatchers.IO) {
-                while (true) {
-                    val pos = next.getAndIncrement()
-                    if (pos >= order.size) break
-                    val indexed = order[pos]
-                    val tested = runCatching { simplePing.pingStrict3WithSni(indexed.value, SIMPLE_SNI_TEST_HOST) }
+        for (batch in candidates.chunked(SIMPLE_FAST_PROBE_PARALLELISM)) {
+            val tested = batch.map { indexed ->
+                async(Dispatchers.IO) {
+                    indexed.index to runCatching { simpleFastProbe(indexed.value) }
                         .getOrElse { e -> indexed.value.copy(pingMs = null, error = e.message ?: e.javaClass.simpleName) }
-                    resultChannel.send(indexed.index to tested)
                 }
-            }
-        }
-        launch {
-            workers.joinAll()
-            resultChannel.close()
-        }
+            }.awaitAll()
+            done += tested.size
 
-        for (testedPair in resultChannel) {
-            results += testedPair
-            val (idx, server) = testedPair
-            val ping = server.pingMs
-            if (ping != null && ping > 0L) {
-                latencyCache[server.id] = SimpleLatencyEntry(ping, System.currentTimeMillis())
-                sniHealthy += testedPair
-            } else {
-                latencyCache.remove(server.id)
+            tested.forEach { (idx, server) ->
+                val ping = server.pingMs
+                if (ping != null && ping > 0L) {
+                    latencyCache[server.id] = SimpleLatencyEntry(ping, System.currentTimeMillis())
+                    healthy += idx to server
+                } else {
+                    latencyCache.remove(server.id)
+                }
             }
             writeSimpleLatencyCache(latencyCache)
 
-            val done = results.size
-            val healthy = sniHealthy.size
-            if (connected == null && ping != null && ping > 0L) {
-                val started = startSelectedSimpleConfig(app, server, idx, startedAt)
+            val bestSoFar = healthy.minByOrNull { it.second.pingMs ?: Long.MAX_VALUE }
+            if (connected == null && bestSoFar != null) {
+                val started = startSelectedSimpleConfig(app, bestSoFar.second, bestSoFar.first, startedAt)
                 if (!started) return@coroutineScope null
-                connected = testedPair
-                log("Simple XRAY connected from first SNI-healthy config • ${simpleDisplayName(idx)} • ${ping}ms • SNI=$SIMPLE_SNI_TEST_HOST; continuing scan")
+                connected = bestSoFar
+                log("Simple active balancer connected to first healthy config • ${simpleDisplayName(bestSoFar.first)} • ${bestSoFar.second.pingMs}ms; scanner continues for lower ping")
+            } else if (connected != null && bestSoFar != null && bestSoFar.first != connected!!.first) {
+                val currentPing = connected!!.second.pingMs ?: Long.MAX_VALUE
+                val bestPing = bestSoFar.second.pingMs ?: Long.MAX_VALUE
+                if (bestPing < currentPing) {
+                    val switched = startSelectedSimpleConfig(app, bestSoFar.second, bestSoFar.first, startedAt)
+                    if (switched) {
+                        log("Simple active balancer switched to lower ping during scan • ${simpleDisplayName(bestSoFar.first)} • ${bestPing}ms < ${currentPing}ms")
+                        connected = bestSoFar
+                    }
+                }
             }
 
-            val bestSoFar = sniHealthy.minByOrNull { it.second.pingMs ?: Long.MAX_VALUE }
             val bestText = bestSoFar?.let { " • best ${simpleDisplayName(it.first)} ${it.second.pingMs}ms" } ?: ""
             val connectedText = connected?.let { "Connected ${simpleDisplayName(it.first)} • " } ?: ""
-            if (done == 1 || ping != null || done % 5 == 0 || done == total) {
-                prefs.edit()
-                    .putString("simpleStatus", "${connectedText}SNI scan $SIMPLE_SNI_TEST_HOST... $done/$total scanned • $healthy healthy$bestText")
-                    .putString("status", if (connected == null) "Searching SNI... $done/$total" else "Simple XRAY connected")
-                    .apply()
-                _state.value = loadState()
+            prefs.edit()
+                .putString("simpleStatus", "${connectedText}Real Xray test... $done/$total scanned • ${healthy.size} healthy$bestText")
+                .putString("status", if (connected == null) "Real Xray test... $done/$total" else "Simple XRAY connected")
+                .apply()
+            _state.value = loadState()
+        }
+
+        val finalBest = healthy.minByOrNull { it.second.pingMs ?: Long.MAX_VALUE }
+        if (connected != null && finalBest != null && finalBest.first != connected!!.first) {
+            val switched = startSelectedSimpleConfig(app, finalBest.second, finalBest.first, startedAt)
+            if (switched) {
+                log("Simple active balancer final selected lowest ping • ${simpleDisplayName(finalBest.first)} • ${finalBest.second.pingMs}ms")
+                connected = finalBest
             }
         }
+        if (connected != null) startSimpleAutoSwitchLoop()
         connected
     }
+
 
     private fun startSimpleBackgroundShuffleScan(configs: List<ServerConfig>, statusPrefix: String) {
         if (prefs.getBoolean("simpleServerlessEnabled", false)) return
         if (configs.size < 2) return
         simpleBackgroundLatencyJob?.cancel()
         simpleBackgroundLatencyJob = viewModelScope.launch(Dispatchers.IO) {
-            pingSimpleConfigsParallel(configs, parallelism = 20, statusPrefix = statusPrefix)
+            pingSimpleConfigsParallel(configs, parallelism = SIMPLE_FAST_PROBE_PARALLELISM, statusPrefix = statusPrefix)
+        }
+    }
+
+    private fun startSimpleAutoSwitchLoop() {
+        if (prefs.getBoolean("simpleServerlessEnabled", false)) return
+        simpleBackgroundLatencyJob?.cancel()
+        val app = getApplication<Application>()
+        simpleBackgroundLatencyJob = viewModelScope.launch {
+            while (isActive && prefs.getBoolean("simpleConnected", false) && prefs.getString("activeMode", "") == "simple_xray" && !prefs.getBoolean("simpleServerlessEnabled", false)) {
+                delay(SIMPLE_AUTO_SWITCH_INTERVAL_MS)
+                val configs = loadSimpleConfigs(serverless = false)
+                if (configs.size < 2) continue
+                val tested = pingSimpleConfigsParallel(configs, parallelism = SIMPLE_FAST_PROBE_PARALLELISM, statusPrefix = "Auto Real Best")
+                val best = tested.firstOrNull { it.second.pingMs != null } ?: continue
+                val current = currentSimpleConfigIndex(configs)
+                val ping = best.second.pingMs ?: continue
+                if (best.first != current) {
+                    prefs.edit()
+                        .putString("simpleStatus", "Auto best: ${simpleDisplayName(best.first)} • ${ping}ms")
+                        .putString("status", "Simple auto best switching")
+                        .apply()
+                    _state.value = loadState()
+                    log("Simple active balancer selected latest lowest ping • from=$current to=${best.first} • ${ping}ms")
+                    startSelectedSimpleConfig(app, best.second, best.first, System.currentTimeMillis())
+                } else {
+                    prefs.edit()
+                        .putString("simpleStatus", "Best selected: ${simpleDisplayName(best.first)} • ${ping}ms")
+                        .putString("status", "Simple best selected")
+                        .apply()
+                    _state.value = loadState()
+                }
+            }
         }
     }
 
 
     fun prepareSimpleNextHealthyUi() {
-        val serverless = prefs.getBoolean("simpleServerlessEnabled", false)
-        val configs = loadSimpleConfigs(serverless)
         prefs.edit()
-            .putBoolean("simpleConnecting", true)
-            .putBoolean("simpleConnected", false)
-            .putString("simpleStatus", if (serverless) "Next config is only for Simple normal mode" else "Testing next healthy config...")
-            .putString("status", if (serverless) "ServerLess has one config" else "Testing next healthy config...")
-            .putBoolean("connecting", false)
-            .putBoolean("connected", false)
-            .putString("activeMode", "simple_xray")
-            .putLong("startedAt", System.currentTimeMillis())
+            .putBoolean("simpleConnecting", false)
+            .putString("simpleStatus", "Next Healthy removed • Simple uses Active Balancer")
+            .putString("status", "Simple Active Balancer")
             .apply()
-        log("Simple XRAY next healthy requested • serverless=$serverless • cached=${configs.size}")
         _state.value = loadState()
+        log("Next Healthy ignored: Simple normal now uses Active Balancer")
     }
 
     fun simpleConnectNextHealthyAfterPermission() {
-        viewModelScope.launch {
-            try {
-                val app = getApplication<Application>()
-                val serverless = prefs.getBoolean("simpleServerlessEnabled", false)
-                if (serverless) {
-                    prefs.edit()
-                        .putBoolean("simpleConnecting", false)
-                        .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                        .putString("simpleStatus", "ServerLess has one config • Next is for Simple normal")
-                        .putString("status", "ServerLess has one config")
-                        .apply()
-                    _state.value = loadState()
-                    return@launch
-                }
+        prefs.edit()
+            .putBoolean("simpleConnecting", false)
+            .putString("simpleStatus", "Next Healthy removed • Active Balancer switches automatically")
+            .putString("status", "Simple Active Balancer")
+            .apply()
+        _state.value = loadState()
+        log("Next Healthy action ignored: Active Balancer handles switching")
+    }
 
-                prefs.edit()
-                    .putBoolean("simpleConnecting", true)
-                    .putBoolean("simpleConnected", false)
-                    .putString("simpleStatus", "Testing next healthy config...")
-                    .putString("status", "Testing next healthy config...")
-                    .putString("activeMode", "simple_xray")
-                    .apply()
-                _state.value = loadState()
 
-                var configs = loadSimpleConfigs(serverless = false)
-                if (configs.isEmpty()) configs = updateSimpleSubscriptionInternal(showReady = false)
-                if (configs.size < 2) {
-                    prefs.edit()
-                        .putBoolean("simpleConnecting", false)
-                        .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                        .putString("simpleStatus", "Need at least 2 configs for Next Healthy")
-                        .putString("status", "Need at least 2 configs")
-                        .apply()
-                    _state.value = loadState()
-                    return@launch
-                }
-
-                val currentIndex = currentSimpleConfigIndex(configs)
-                val latencyCache = loadSimpleLatencyCache()
-                val order = buildList {
-                    // Next Healthy must use the already-scanned healthy cache, not a fresh full scan.
-                    // It still verifies each cached candidate with 3x real Xray ping right before switching.
-                    for (i in 1 until configs.size) {
-                        val idx = (currentIndex + i).floorMod(configs.size)
-                        val candidate = configs.getOrNull(idx) ?: continue
-                        if (latencyCache.containsKey(candidate.id)) add(idx)
-                    }
-                }
-
-                if (order.isEmpty()) {
-                    prefs.edit()
-                        .putBoolean("simpleConnecting", false)
-                        .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                        .putString("simpleStatus", "No cached healthy config found • tap Ping All first")
-                        .putString("status", "No cached healthy config")
-                        .apply()
-                    _state.value = loadState()
-                    log("Simple XRAY next healthy: no cached healthy candidates; run Ping All first")
-                    return@launch
-                }
-
-                var selectedIndex = -1
-                var selected: ServerConfig? = null
-
-                // Use only cached healthy configs, but re-check each one live with 3x real Xray ping.
-                // If a cached config no longer responds, remove it from cache and continue automatically.
-                for ((pos, idx) in order.withIndex()) {
-                    if (idx !in configs.indices) continue
-                    val candidate = configs[idx]
-                    val cachedPing = latencyCache[candidate.id]?.pingMs
-                    val cachedText = cachedPing?.let { " • cached ${it}ms" } ?: ""
-                    prefs.edit()
-                        .putString("simpleStatus", "Testing cached healthy ${pos + 1}/${order.size}: ${simpleDisplayName(idx)}$cachedText")
-                        .putString("status", "Testing cached healthy...")
-                        .apply()
-                    _state.value = loadState()
-                    log("Simple XRAY next healthy cached candidate live 3x Xray ping • index=$idx • name=${simpleDisplayName(idx)}$cachedText")
-                    val tested = withContext(Dispatchers.IO) {
-                        runCatching { simplePing.pingStrict3(candidate) }
-                            .getOrElse { e -> candidate.copy(pingMs = null, error = e.message ?: e.javaClass.simpleName) }
-                    }
-                    val testedPing = tested.pingMs
-                    if (testedPing != null && testedPing > 0L) {
-                        saveSimpleLatencyResult(tested, testedPing)
-                        selectedIndex = idx
-                        selected = tested
-                        break
-                    } else {
-                        removeSimpleLatencyResult(candidate)
-                        val failReason = tested.error ?: "no ping"
-                        log("Simple XRAY next healthy skipped stale cached config • index=$idx • name=${simpleDisplayName(idx)} • $failReason")
-                    }
-                }
-
-                val best = selected
-                if (best == null || selectedIndex < 0) {
-                    prefs.edit()
-                        .putBoolean("simpleConnecting", false)
-                        .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                        .putString("simpleStatus", "No cached healthy config answered live 3x ping")
-                        .putString("status", "No cached healthy answered")
-                        .apply()
-                    _state.value = loadState()
-                    log("Simple XRAY next healthy: no cached healthy config answered live 3x Xray ping")
-                    return@launch
-                }
-
-                val displayName = simpleDisplayName(selectedIndex)
-                val pingLabel = best.pingMs?.let { "${it}ms" } ?: "—"
-                prefs.edit()
-                    .putString("simpleBestName", displayName)
-                    .putString("simpleBestId", best.id)
-                    .putInt("simpleBestIndex", selectedIndex)
-                    .putInt("simpleBestRawHash", best.raw.hashCode())
-                    .putLong("simpleBestPingMs", best.pingMs ?: -1L)
-                    .putString("simpleStatus", "Switching to next healthy: $displayName • Ping $pingLabel")
-                    .putString("status", "Switching to next healthy")
-                    .putString("activeMode", "simple_xray")
-                    .putLong("startedAt", System.currentTimeMillis())
-                    .putLong("simpleLastTrafficAt", System.currentTimeMillis())
-                    .putBoolean("simpleHadTraffic", false)
-                    .apply()
-                _state.value = loadState()
-                log("Simple XRAY next healthy selected: $displayName • $pingLabel • index=$selectedIndex/${configs.size}")
-
-                val intent = Intent(app, RkhVpnService::class.java)
-                    .setAction(RkhVpnService.ACTION_START)
-                    .putExtra(RkhVpnService.EXTRA_RAW_CONFIG, best.raw)
-                    .putExtra(RkhVpnService.EXTRA_SERVER_NAME, "SIMORGH Simple • $displayName")
-                runCatching { app.startForegroundService(intent) }
-                    .onFailure { e ->
-                        prefs.edit()
-                            .putBoolean("simpleConnecting", false)
-                            .putBoolean("simpleConnected", false)
-                            .putString("simpleStatus", "Next Healthy start failed: ${e.message ?: e.javaClass.simpleName}")
-                            .putString("status", "Next Healthy start failed")
-                            .putString("activeMode", "idle")
-                            .putLong("startedAt", 0L)
-                            .apply()
-                        log("Simple XRAY next healthy service start failed", e)
-                        _state.value = loadState()
-                        return@launch
-                    }
-
-                prefs.edit()
-                    .putBoolean("simpleConnecting", false)
-                    .putBoolean("simpleConnected", true)
-                    .putString("simpleStatus", "Simple XRAY connected: $displayName • Ping $pingLabel")
-                    .putString("status", "Simple XRAY connected")
-                    .putString("activeMode", "simple_xray")
-                    .apply()
-                best.pingMs?.let { saveSimpleLatencyResult(best, it) }
-                prefs.edit().putInt("simpleLatencyProbeIndex", selectedIndex).apply()
-                _state.value = loadState()
-            } catch (e: Throwable) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                prefs.edit()
-                    .putBoolean("simpleConnecting", false)
-                    .putBoolean("simpleConnected", prefs.getBoolean("simpleConnected", false))
-                    .putString("simpleStatus", "Next Healthy error: ${e.message ?: e.javaClass.simpleName}")
-                    .putString("status", "Next Healthy error")
-                    .apply()
-                log("Simple XRAY next healthy unexpected error", e)
-                _state.value = loadState()
-            }
-        }
+    private fun resetSimpleHealthyMemory() {
+        simpleBackgroundLatencyJob?.cancel()
+        simpleBackgroundLatencyJob = null
+        prefs.edit()
+            .remove("simpleLatencyCache")
+            .remove("simpleLatencyProbeIndex")
+            .remove("simpleLatencyHealthyCount")
+            .remove("simpleLatencyCacheUpdatedAt")
+            .remove("simpleBestId")
+            .remove("simpleBestIndex")
+            .remove("simpleBestRawHash")
+            .putString("simpleBestName", "")
+            .putLong("simpleBestPingMs", -1L)
+            .putString("simpleLatencyScannerStatus", "")
+            .apply()
     }
 
     private data class SimpleLatencyEntry(val pingMs: Long, val at: Long)
 
     private fun checkSimpleNormalBackgroundLatency() {
-        val now = System.currentTimeMillis()
-        if (prefs.getBoolean("simpleServerlessEnabled", false)) return
-        if (!prefs.getBoolean("simpleConnected", false)) return
-        if (prefs.getBoolean("simpleConnecting", false)) return
-        if (prefs.getString("activeMode", "") != "simple_xray") return
-        if (now - prefs.getLong("simpleLatencyLastProbeAt", 0L) < SIMPLE_LATENCY_PROBE_INTERVAL_MS) return
-        if (simpleBackgroundLatencyJob?.isActive == true) return
-
-        val configs = loadSimpleConfigs(serverless = false)
-        if (configs.size < 2) return
-        val nextIndex = configs.indices.random()
-        val candidate = configs[nextIndex]
-        prefs.edit()
-            .putLong("simpleLatencyLastProbeAt", now)
-            .putInt("simpleLatencyProbeIndex", nextIndex)
-            .putString("simpleLatencyScannerStatus", "Refreshing ping: ${simpleDisplayName(nextIndex)}")
-            .apply()
-
-        simpleBackgroundLatencyJob = viewModelScope.launch(Dispatchers.IO) {
-            val tested = runCatching { simplePing.pingStrict3(candidate) }.getOrElse { candidate.copy(pingMs = null, error = it.message ?: it.javaClass.simpleName) }
-            val ping = tested.pingMs
-            if (ping != null) {
-                saveSimpleLatencyResult(tested, ping)
-                log("Simple background latency refreshed • index=$nextIndex/${configs.size} • ${simpleDisplayName(nextIndex)} • ${ping}ms • appExcludedFromVpn=true")
-            } else {
-                removeSimpleLatencyResult(candidate)
-                log("Simple background latency failed • index=$nextIndex/${configs.size} • ${simpleDisplayName(nextIndex)} • ${tested.error ?: "unknown"} • appExcludedFromVpn=true")
-            }
-            prefs.edit()
-                .putString("simpleLatencyScannerStatus", if (ping != null) "Ready pings refreshed • ${simpleDisplayName(nextIndex)} ${ping}ms" else "Refreshing pings...")
-                .apply()
-        }
+        // The Simple active balancer has its own scan/auto-switch loop;
+        // do not start the old background latency scanner here.
+        return
     }
 
     private fun loadSimpleLatencyCache(): Map<String, SimpleLatencyEntry> {
@@ -1049,13 +1031,16 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun writeSimpleLatencyCache(cache: Map<String, SimpleLatencyEntry>) {
         val now = System.currentTimeMillis()
-        val text = cache.entries
+        val keptEntries = cache.entries
+            .sortedWith(compareBy<Map.Entry<String, SimpleLatencyEntry>> { it.value.pingMs }.thenBy { it.key })
+            .take(SIMPLE_LATENCY_CACHE_MAX_ENTRIES)
+        val text = keptEntries
             .sortedBy { it.key }
             .joinToString("\n") { (id, entry) -> "$id|${entry.pingMs}|${entry.at}" }
         prefs.edit()
             .putString("simpleLatencyCache", text)
             .putLong("simpleLatencyCacheUpdatedAt", now)
-            .putInt("simpleLatencyHealthyCount", cache.size)
+            .putInt("simpleLatencyHealthyCount", keptEntries.size)
             .apply()
     }
 
@@ -1110,20 +1095,89 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private suspend fun simpleFastProbe(server: ServerConfig): ServerConfig = withContext(Dispatchers.IO) {
+        if (server.raw.isBlank()) return@withContext server.copy(pingMs = null, error = "Empty config")
+        withTimeoutOrNull(SIMPLE_REAL_XRAY_TEST_TIMEOUT_MS) {
+            simplePing.pingQuick(server)
+        } ?: server.copy(pingMs = null, error = "Real Xray test timeout")
+    }
+
+    private data class SimpleProbeOutcome(val ms: Long? = null, val error: String? = null)
+
+    private fun tcpConnectWithDeadline(host: String, port: Int, timeoutMs: Int): SimpleProbeOutcome {
+        val socket = Socket()
+        val result = AtomicReference<SimpleProbeOutcome?>(null)
+        val thread = Thread {
+            val outcome = runCatching {
+                val started = System.nanoTime()
+                socket.soTimeout = timeoutMs
+                socket.connect(InetSocketAddress(host, port), timeoutMs)
+                SimpleProbeOutcome(ms = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L))
+            }.getOrElse { e ->
+                SimpleProbeOutcome(error = (e.message ?: e.javaClass.simpleName).take(120))
+            }
+            result.set(outcome)
+        }.apply {
+            isDaemon = true
+            name = "simple-fast-probe"
+        }
+        thread.start()
+        thread.join((timeoutMs + 350).toLong())
+        result.get()?.let { completed ->
+            runCatching { socket.close() }
+            return completed
+        }
+        runCatching { socket.close() }
+        return SimpleProbeOutcome(error = SocketTimeoutException("Probe timeout").message ?: "Probe timeout")
+    }
+
+    private fun simpleProbeTarget(server: ServerConfig): Pair<String, Int>? {
+        val directHost = server.host?.trim().orEmpty()
+        val directPort = (server.port ?: -1).takeIf { it in 1..65535 }
+        if (directHost.isNotBlank() && directPort != null) return directHost to directPort
+        val raw = server.raw.replace("﻿", "").trim().substringBefore('#')
+        return runCatching {
+            when {
+                raw.startsWith("vmess://", ignoreCase = true) -> {
+                    val payload = raw.substringAfter("://")
+                    val json = String(Base64.decode(payload, Base64.DEFAULT), Charsets.UTF_8)
+                    val o = JSONObject(json)
+                    val host = o.optString("add", "").trim()
+                    val port = o.optInt("port", 443).takeIf { it in 1..65535 } ?: 443
+                    if (host.isBlank()) null else host to port
+                }
+                raw.startsWith("ss://", ignoreCase = true) -> {
+                    val after = raw.removePrefix("ss://")
+                    val hostPort = if ('@' in after) after.substringAfter('@') else after
+                    val host = hostPort.substringBefore(':').trim()
+                    val port = hostPort.substringAfter(':', "443").substringBefore('?').toIntOrNull()?.takeIf { it in 1..65535 } ?: 443
+                    if (host.isBlank()) null else host to port
+                }
+                raw.contains("://") -> {
+                    val uri = URI(raw)
+                    val host = uri.host?.trim().orEmpty()
+                    val port = uri.port.takeIf { it in 1..65535 } ?: 443
+                    if (host.isBlank()) null else host to port
+                }
+                else -> null
+            }
+        }.getOrNull()
+    }
+
     private suspend fun pingSimpleConfigsParallel(
         configs: List<ServerConfig>,
         parallelism: Int = 20,
         statusPrefix: String = "Ping All"
     ): List<Pair<Int, ServerConfig>> = coroutineScope {
-        val safeParallelism = parallelism.coerceIn(1, 20)
+        val safeParallelism = parallelism.coerceIn(1, SIMPLE_FAST_PROBE_PARALLELISM)
         val total = configs.size
-        val order = configs.withIndex().toList().shuffled()
+        val order = configs.withIndex().filter { !it.value.raw.trim().startsWith("{") }.toList().shuffled()
         val results = ArrayList<Pair<Int, ServerConfig>>(total)
         val latencyCache = loadSimpleLatencyCache().toMutableMap()
         for (batch in order.chunked(safeParallelism)) {
             val tested = batch.map { indexed ->
                 async(Dispatchers.IO) {
-                    indexed.index to runCatching { simplePing.pingStrict3(indexed.value) }
+                    indexed.index to runCatching { simpleFastProbe(indexed.value) }
                         .getOrElse { e -> indexed.value.copy(pingMs = null, error = e.message ?: e.javaClass.simpleName) }
                 }
             }.awaitAll()
@@ -1683,6 +1737,8 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun simpleDisconnect() {
+        simpleHealthyScanJob?.cancel()
+        simpleHealthyScanJob = null
         simpleBackgroundLatencyJob?.cancel()
         simpleBackgroundLatencyJob = null
         val app = getApplication<Application>()
@@ -1722,7 +1778,7 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
             if (serverless) log("Simple ServerLess parser result • configs=${configs.size} • firstRawJson=${configs.firstOrNull()?.raw?.trim()?.startsWith("{") == true}")
             if (configs.isEmpty()) error("No supported configs found")
             prefs.edit()
-                .putString(simpleBodyKey(serverless), body)
+                .putString(simpleBodyKey(serverless), encodeSimpleBodyForCache(body))
                 .putInt(simpleCountKey(serverless), configs.size)
                 .putInt("simpleConfigCount", configs.size)
                 .putLong(simpleUpdatedAtKey(serverless), System.currentTimeMillis())
@@ -1752,13 +1808,28 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         }.getOrElse { e ->
             val fallback = loadSimpleConfigs(serverless)
             prefs.edit()
-                .putString("simpleStatus", if (fallback.isNotEmpty()) "$modeLabel load failed • using cached ${fallback.size} configs" else "$modeLabel load failed: ${e.message ?: e.javaClass.simpleName}")
+                .putString("simpleStatus", simpleLoadFailureStatus(modeLabel, fallback.size))
                 .putInt("simpleConfigCount", fallback.size)
                 .apply()
-            log("Simple XRAY $modeLabel config load failed", e)
+            log("Simple XRAY $modeLabel config load failed • ${safeThrowableLabel(e)}")
             _state.value = loadState()
             fallback
         }
+    }
+
+    private fun simpleLoadFailureStatus(modeLabel: String, cachedCount: Int): String {
+        return if (cachedCount > 0) {
+            "$modeLabel load failed • using cached $cachedCount configs"
+        } else {
+            "$modeLabel load failed • check internet and try again"
+        }
+    }
+
+    private fun safeThrowableLabel(t: Throwable): String = t.javaClass.simpleName.ifBlank { "Error" }
+
+    private fun decodeHiddenSimpleSubscriptionUrl(): String {
+        val encoded = "aHR0cHM6Ly9zdWJzaW1vcmdoLnNhbGFtNzgzLndvcmtlcnMuZGV2"
+        return String(Base64.decode(encoded, Base64.NO_WRAP), Charsets.UTF_8)
     }
 
     private fun fetchSimpleConfigBody(serverless: Boolean): String {
@@ -1799,16 +1870,91 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         return emptyList()
     }
 
+
+    private fun encodeSimpleBodyForCache(body: String): String {
+        val clean = body.replace("﻿", "").trim()
+        if (clean.isBlank()) return ""
+        return runCatching {
+            val out = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(out).use { gzip -> gzip.write(clean.toByteArray(Charsets.UTF_8)) }
+            "gz64:" + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        }.getOrDefault(clean)
+    }
+
+    private fun decodeSimpleBodyFromCache(value: String): String {
+        val clean = value.trim()
+        if (!clean.startsWith("gz64:")) return clean
+        return runCatching {
+            val bytes = Base64.decode(clean.removePrefix("gz64:"), Base64.NO_WRAP)
+            java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(bytes)).use { gzip ->
+                String(gzip.readBytes(), Charsets.UTF_8)
+            }
+        }.getOrDefault("")
+    }
+
     private fun simpleBodyKey(serverless: Boolean) = if (serverless) "simpleServerlessConfigBody" else "simpleSubscriptionBody"
     private fun simpleCountKey(serverless: Boolean) = if (serverless) "simpleServerlessConfigCount" else "simpleNormalConfigCount"
     private fun simpleUpdatedAtKey(serverless: Boolean) = if (serverless) "simpleServerlessConfigUpdatedAt" else "simpleSubscriptionUpdatedAt"
 
     private fun loadSimpleConfigs(serverless: Boolean = prefs.getBoolean("simpleServerlessEnabled", false)): List<ServerConfig> {
-        val cachedBody = prefs.getString(simpleBodyKey(serverless), "").orEmpty()
+        val cachedBody = decodeSimpleBodyFromCache(prefs.getString(simpleBodyKey(serverless), "").orEmpty())
         val cachedConfigs = if (cachedBody.isBlank()) emptyList() else parseSimpleConfigs(cachedBody, serverless)
         if (cachedConfigs.isNotEmpty()) return cachedConfigs
         if (!serverless) return emptyList()
         return runCatching { parseSimpleConfigs(readBundledServerlessConfig(), serverless = true) }.getOrDefault(emptyList())
+    }
+
+
+    private fun cleanupAppRuntimeCache() {
+        val app = getApplication<Application>()
+        val now = System.currentTimeMillis()
+        // Real Xray health tests must not leave big temporary geo/runtime folders in Android cache.
+        // They are disposable, so remove the ping runtime root on app start.
+        runCatching { File(app.cacheDir, "xray-ping").deleteRecursively() }
+        runCatching { File(app.cacheDir, "xray-empty-assets").deleteRecursively() }
+        listOf(
+            File(app.cacheDir, "cf-xray-latency")
+        ).forEach { pruneRuntimeDir(it, now) }
+        runCatching { File(app.filesDir, "native-bin").deleteRecursively() }
+        compactCachedSimpleBodies()
+    }
+
+    private fun compactCachedSimpleBodies() {
+        val edit = prefs.edit()
+        var changed = false
+        listOf("simpleSubscriptionBody", "simpleServerlessConfigBody").forEach { key ->
+            val value = prefs.getString(key, "").orEmpty()
+            if (value.isNotBlank() && !value.startsWith("gz64:")) {
+                edit.putString(key, encodeSimpleBodyForCache(value))
+                changed = true
+            }
+        }
+        if (changed) edit.apply()
+    }
+
+    private fun pruneRuntimeDir(dir: File, now: Long = System.currentTimeMillis()) {
+        if (!dir.exists()) return
+        dir.listFiles()?.forEach { child ->
+            if (now - child.lastModified() > RUNTIME_CACHE_KEEP_MS) {
+                runCatching { if (child.isDirectory) child.deleteRecursively() else child.delete() }
+            }
+        }
+        val children = dir.listFiles().orEmpty().sortedByDescending { it.lastModified() }
+        var totalBytes = 0L
+        children.forEachIndexed { index, child ->
+            val childBytes = safeFileSize(child)
+            totalBytes += childBytes
+            if (index >= RUNTIME_CACHE_MAX_FILES || totalBytes > RUNTIME_CACHE_MAX_BYTES) {
+                runCatching { if (child.isDirectory) child.deleteRecursively() else child.delete() }
+            }
+        }
+    }
+
+    private fun safeFileSize(file: File): Long {
+        return runCatching {
+            if (file.isFile) file.length()
+            else file.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        }.getOrDefault(0L)
     }
 
     fun clearSavedCleanIps() {
@@ -1930,14 +2076,16 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         val cf = parseFullVlessForCf(vlessRaw) ?: return null
         if (!isIpv4Literal(cleanIp)) return null
         var process: Process? = null
+        var configFile: File? = null
         return runCatching {
             val app = getApplication<Application>()
             val xray = NativeBinaryManager(app).prepare("xray")
             val socksPort = freeLocalPort()
             val workDir = File(app.cacheDir, "cf-xray-latency").apply { mkdirs() }
+            pruneRuntimeDir(workDir)
             val config = buildCfLatencyXrayConfig(cf, cleanIp, socksPort)
-            val configFile = File(workDir, "cf_latency_${System.currentTimeMillis()}.json").apply { writeText(config) }
-            process = ProcessBuilder(listOf(xray.absolutePath, "run", "-config", configFile.absolutePath))
+            configFile = File(workDir, "cf_latency_${System.currentTimeMillis()}.json").apply { writeText(config) }
+            process = ProcessBuilder(listOf(xray.absolutePath, "run", "-config", configFile!!.absolutePath))
                 .directory(workDir).redirectErrorStream(true).start()
             Thread.sleep(650)
             val exit = runCatching { process?.exitValue() }.getOrNull()
@@ -1958,7 +2106,10 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
             }
             val ms = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L)
             if (ms < 20L) null else ms
-        }.getOrNull().also { process?.destroy() }
+        }.getOrNull().also {
+            process?.destroy()
+            runCatching { configFile?.delete() }
+        }
     }
 
 
@@ -2087,42 +2238,16 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                 checkSimpleNormalWatchdog()
                 checkSimpleNormalBackgroundLatency()
                 _state.value = loadState()
-                delay(1000)
+                delay(SYNC_LOOP_INTERVAL_MS)
             }
         }
     }
 
 
     private fun checkSimpleNormalWatchdog() {
-        val now = System.currentTimeMillis()
-        if (prefs.getBoolean("simpleServerlessEnabled", false)) return
-        if (!prefs.getBoolean("simpleConnected", false)) return
-        if (prefs.getBoolean("simpleConnecting", false)) return
-        if (prefs.getString("activeMode", "") != "simple_xray") return
-        val startedAt = prefs.getLong("startedAt", 0L)
-        if (startedAt <= 0L || now - startedAt < 60_000L) return
-        val lastReconnectAt = prefs.getLong("simpleWatchdogReconnectAt", 0L)
-        if (now - lastReconnectAt < 90_000L) return
-        val hadTraffic = prefs.getBoolean("simpleHadTraffic", false)
-        if (!hadTraffic) return
-        val lastTrafficAt = prefs.getLong("simpleLastTrafficAt", startedAt)
-        val down = prefs.getLong("downloadKbps", 0L)
-        val up = prefs.getLong("uploadKbps", 0L)
-        if (down > 0L || up > 0L) {
-            prefs.edit()
-                .putLong("simpleLastTrafficAt", now)
-                .putBoolean("simpleHadTraffic", true)
-                .apply()
-            return
-        }
-        if (now - lastTrafficAt < 75_000L) return
-        prefs.edit()
-            .putLong("simpleWatchdogReconnectAt", now)
-            .putString("simpleStatus", "Simple auto-reconnect: testing next healthy config...")
-            .putString("status", "Simple auto-reconnect")
-            .apply()
-        log("Simple normal watchdog triggered • no traffic for ${(now - lastTrafficAt) / 1000}s • switching to next healthy config")
-        simpleConnectNextHealthyAfterPermission()
+        // The old Next Healthy watchdog is disabled; active balancer rotation is handled
+        // by startSimpleAutoSwitchLoop() after Simple normal connects.
+        return
     }
 
     private fun loadState(): SimorghPublicState {
@@ -2350,8 +2475,9 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         return parts.size == 4 && parts.all { part -> part.toIntOrNull()?.let { it in 0..255 } == true }
     }
 
-    private fun defaultIsp(): String = ispOptions.firstOrNull { it.contains("arvan", ignoreCase = true) }
-        ?: "AbrArvan CDN and IaaS"
+    private fun defaultIsp(): String {
+        return prefs.getString("selectedIsp", "AbrArvan CDN and IaaS").orEmpty().ifBlank { "AbrArvan CDN and IaaS" }
+    }
 
     private fun loadIspOptions(): List<String> {
         val out = linkedSetOf<String>()
@@ -2364,8 +2490,11 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }.onFailure { log("Failed to load ISP options from ranges/IPs.csv", it) }
-        val sorted = out.sortedWith(compareBy<String> { !it.contains("arvan", ignoreCase = true) }.thenBy { it.lowercase(Locale.US) })
-        return sorted.ifEmpty { listOf("AbrArvan CDN and IaaS") }
+        val selectedDefault = prefs.getString("selectedIsp", "AbrArvan CDN and IaaS").orEmpty().ifBlank { "AbrArvan CDN and IaaS" }
+        val shuffled = out
+            .filterNot { it == selectedDefault }
+            .shuffled(kotlin.random.Random(System.currentTimeMillis()))
+        return (listOf(selectedDefault) + shuffled).distinct().ifEmpty { listOf("AbrArvan CDN and IaaS") }
     }
 
     private fun loadSniOptions(): List<String> {
@@ -2437,15 +2566,58 @@ class SimorghPublicViewModel(app: Application) : AndroidViewModel(app) {
         RKhVpnLogStore.append(getApplication(), "SIMORGH-UI", message, throwable)
     }
 
+
+    override fun onCleared() {
+        simpleHealthyScanJob?.cancel()
+        simpleBackgroundLatencyJob?.cancel()
+        cleanupGeoAssetsAfterAppClose()
+        super.onCleared()
+    }
+
+    private fun cleanupGeoAssetsAfterAppClose() {
+        val app = getApplication<Application>()
+        // UI close: always remove disposable Xray health-test cache.
+        runCatching { File(app.cacheDir, "xray-ping").deleteRecursively() }
+        runCatching { File(app.cacheDir, "xray-empty-assets").deleteRecursively() }
+
+        // Shared geo assets are removed on UI close only when no VPN/Simple core is active.
+        // If VPN is still running in the background, keep them to avoid breaking active routing.
+        val publicPrefs = app.getSharedPreferences("simorgh_public_state", Context.MODE_PRIVATE)
+        val mainPrefs = app.getSharedPreferences("rkh_vpn_state", Context.MODE_PRIVATE)
+        val activeMode = publicPrefs.getString("activeMode", "").orEmpty()
+        val vpnStillActive = mainPrefs.getBoolean("serviceConnected", false) ||
+            publicPrefs.getBoolean("simpleConnected", false) ||
+            publicPrefs.getBoolean("simpleConnecting", false) ||
+            activeMode == "simple_xray" ||
+            activeMode == "public" ||
+            activeMode == "nipo"
+        if (!vpnStillActive) {
+            runCatching { File(app.filesDir, "xray-assets").deleteRecursively() }
+            runCatching { File(app.filesDir, "xray-bin-runtime/geosite.dat").delete() }
+            runCatching { File(app.filesDir, "xray-bin-runtime/geoip.dat").delete() }
+        }
+    }
+
     class Factory(private val app: Application) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(c: Class<T>): T = SimorghPublicViewModel(app) as T
     }
     companion object {
-        private const val SIMPLE_LATENCY_PROBE_INTERVAL_MS = 10_000L
-        private const val SIMPLE_LATENCY_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60_000L
-        private const val SIMPLE_LATENCY_CACHE_KEEP_MS = 7 * 24 * 60 * 60_000L
+        private const val SYNC_LOOP_INTERVAL_MS = 3_000L
+        private const val SIMPLE_LATENCY_PROBE_INTERVAL_MS = 10 * 60_000L
+        private const val SIMPLE_LATENCY_CACHE_MAX_AGE_MS = 24 * 60 * 60_000L
+        private const val SIMPLE_LATENCY_CACHE_KEEP_MS = 24 * 60 * 60_000L
+        private const val SIMPLE_LATENCY_CACHE_MAX_ENTRIES = 80
+        private const val RUNTIME_CACHE_KEEP_MS = 5 * 60_000L
+        private const val RUNTIME_CACHE_MAX_FILES = 4
+        private const val RUNTIME_CACHE_MAX_BYTES = 8L * 1024L * 1024L
         private const val SIMPLE_CONNECT_MIN_SNI_HEALTHY = 3
+        private const val SIMPLE_SCAN_PARALLELISM = 8
+        private const val SIMPLE_FAST_PROBE_PARALLELISM = 2
+        private const val SIMPLE_FAST_PROBE_TIMEOUT_MS = 1800
+        private const val SIMPLE_REAL_XRAY_TEST_TIMEOUT_MS = 9_000L
+        private const val SIMPLE_AUTO_SWITCH_INTERVAL_MS = 15_000L
+        private const val SIMPLE_BALANCER_MAX_OUTBOUNDS = 32
         private const val SIMPLE_SNI_TEST_HOST = "google.com"
     }
 

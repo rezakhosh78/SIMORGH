@@ -109,11 +109,13 @@ class PingEngine(private val context: Context) {
 
     private fun realXrayLatency(server: ServerConfig, bootTimeoutMs: Long = 5000L, requestTimeoutMs: Int = 5000, sniHost: String? = null): ServerConfig {
         val xray = nativeBinaryManager.prepare("xray")
+        cleanupOldPingRuntimeDirs()
         val runtimeDir = File(context.cacheDir, "xray-ping/${server.id}_${System.currentTimeMillis()}").apply { mkdirs() }
-        ensureXrayGeoAssets(runtimeDir)
         val socksPort = findFreePort()
         val configFile = File(runtimeDir, "config.json")
-        configFile.writeText(XrayBinaryConfigBuilder.socksConfigFromRaw(server.raw, socksPort))
+        val configJson = XrayBinaryConfigBuilder.socksConfigFromRaw(server.raw, socksPort)
+        configFile.writeText(configJson)
+        val assetDir = prepareXrayAssetDir(configJson)
         var process: Process? = null
         val logLines = mutableListOf<String>()
         try {
@@ -121,8 +123,8 @@ class PingEngine(private val context: Context) {
             process = ProcessBuilder(xray.absolutePath, "run", "-config", configFile.absolutePath)
                 .directory(runtimeDir)
                 .apply {
-                    environment()["XRAY_LOCATION_ASSET"] = runtimeDir.absolutePath
-                    environment()["V2RAY_LOCATION_ASSET"] = runtimeDir.absolutePath
+                    environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                    environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
                 }
                 .redirectErrorStream(true)
                 .start()
@@ -166,11 +168,41 @@ class PingEngine(private val context: Context) {
     }
 
 
-    private fun ensureXrayGeoAssets(runtimeDir: File) {
+
+    private fun cleanupOldPingRuntimeDirs() {
+        val parent = File(context.cacheDir, "xray-ping")
+        if (!parent.exists()) return
+        val now = System.currentTimeMillis()
+        parent.listFiles()?.forEach { child ->
+            if (now - child.lastModified() > PING_RUNTIME_KEEP_MS) {
+                runCatching { if (child.isDirectory) child.deleteRecursively() else child.delete() }
+            }
+        }
+        val children = parent.listFiles().orEmpty().sortedByDescending { it.lastModified() }
+        if (children.size > PING_RUNTIME_MAX_DIRS) {
+            children.drop(PING_RUNTIME_MAX_DIRS).forEach { old ->
+                runCatching { if (old.isDirectory) old.deleteRecursively() else old.delete() }
+            }
+        }
+    }
+
+    private fun prepareXrayAssetDir(configJson: String): File {
+        if (!configJson.contains("geosite:") && !configJson.contains("geoip:")) {
+            return File(context.cacheDir, "xray-empty-assets").apply { mkdirs() }
+        }
+        return File(context.filesDir, "xray-assets").apply {
+            mkdirs()
+            ensureXrayGeoAssets(this)
+        }
+    }
+
+    private fun ensureXrayGeoAssets(assetDir: File) {
         listOf("geosite.dat", "geoip.dat").forEach { assetName ->
+            val outFile = File(assetDir, assetName)
+            if (outFile.exists() && outFile.length() > 1024L) return@forEach
             runCatching {
                 context.assets.open("xray/$assetName").use { input ->
-                    File(runtimeDir, assetName).outputStream().use { output -> input.copyTo(output) }
+                    outFile.outputStream().use { output -> input.copyTo(output) }
                 }
             }
         }
@@ -239,4 +271,9 @@ class PingEngine(private val context: Context) {
 
     private fun log(message: String, throwable: Throwable? = null) =
         RKhVpnLogStore.append(context, "Ping", message, throwable)
+
+    private companion object {
+        private const val PING_RUNTIME_KEEP_MS = 30_000L
+        private const val PING_RUNTIME_MAX_DIRS = 1
+    }
 }

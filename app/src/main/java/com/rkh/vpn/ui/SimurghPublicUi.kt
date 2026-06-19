@@ -195,7 +195,7 @@ fun SimorghPublicHome(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "1.1.23.45",
+                            text = "v1.1.23.46",
                             color = Color.White.copy(alpha = 0.64f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -279,7 +279,7 @@ private fun SimpleXrayCard(
         state.simpleConnecting -> Color(0xFFFF1744)
         else -> Color(0xFFFF1744)
     }
-    var showConfigs by remember { mutableStateOf(false) }
+    var showConfigs by remember { mutableStateOf(true) }
     GlassCard(accent = accent) {
         LiquidBubbleText("Simple", big = true)
         LiquidBubbleParagraph(
@@ -309,27 +309,15 @@ private fun SimpleXrayCard(
             SimpleConfigListPanel(state = state, onPingAll = onPingAll, onConnectConfig = onConnectConfig)
         }
         SimpleXrayConnectOrb(state = state, color = accent, onConnect = onConnect)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = onUpdate,
-                enabled = !state.simpleConnecting,
-                shape = RoundedCornerShape(999.dp),
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = .14f), disabledContainerColor = Color.White.copy(alpha = .07f)),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))
-            ) {
-                Text("Update", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Button(
-                onClick = onNextHealthy,
-                enabled = !state.simpleConnecting && !state.simpleServerlessEnabled && state.simpleConfigCount > 1,
-                shape = RoundedCornerShape(999.dp),
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = .14f), disabledContainerColor = Color.White.copy(alpha = .07f)),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))
-            ) {
-                Text("Next Healthy", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
+        Button(
+            onClick = onUpdate,
+            enabled = !state.simpleConnecting,
+            shape = RoundedCornerShape(999.dp),
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = .14f), disabledContainerColor = Color.White.copy(alpha = .07f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))
+        ) {
+            Text("Update", color = Color.White, fontWeight = FontWeight.Bold)
         }
         Button(
             onClick = onClearCache,
@@ -368,7 +356,6 @@ private fun SimpleConfigListPanel(state: SimorghPublicState, onPingAll: () -> Un
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Simple Configs", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                Text("Names are hidden and shown as numbers.", color = Color.White.copy(alpha = .62f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Button(
                 onClick = onPingAll,
@@ -1060,7 +1047,7 @@ private fun SimpleXrayConnectOrb(state: SimorghPublicState, color: Color, onConn
                     ),
                     CircleShape
                 )
-                .clickable { onConnect() },
+                .clickable(enabled = !state.simpleConnecting) { onConnect() },
             contentAlignment = Alignment.Center
         ) {
             Box(
