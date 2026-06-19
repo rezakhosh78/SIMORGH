@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, example: v1.11.23.46"
+        description: "Release tag, example: v1.1.23.46"
         required: false
-        default: "v1.11.23.46"
+        default: "v1.1.23.46"
   push:
     tags:
-      - "v1.11.23.46"
+      - "v1.1.23.46"
 
 permissions:
   contents: write
@@ -90,7 +90,7 @@ jobs:
         run: |
           VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' build.gradle.kts | head -1)
           VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' build.gradle.kts | head -1)
-          RELEASE_VERSION="v1.11.23.46"
+          RELEASE_VERSION="v1.1.23.46"
 
           TAG="$RELEASE_VERSION"
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
@@ -134,9 +134,9 @@ jobs:
           VERSION_CODE="${{ steps.apk.outputs.version_code }}"
 
           cat > release_notes.md <<'EOF'
-          ## 🚀 SIMORGH VPN v1.11.23.46
+          ## 🚀 SIMORGH VPN v1.1.23.46
 
-          ### ✨ Changes compared to v1.11.23.45
+          ### ✨ Changes compared to v1.1.23.45
 
           * 🧠 Improved **Simple Mode** connection stability
           * ⚡ Added safer click handling for the **Simple Connect** button to prevent duplicate connect jobs and random crashes
@@ -151,8 +151,8 @@ jobs:
           * 🧭 Optimized `geoip.dat` / `geosite.dat` handling to avoid unnecessary cache growth
           * 🔒 Safer cleanup of geo assets only when VPN is not active
           * 📋 Removed extra helper text from the Simple configs list
-          * 🏷️ Updated in-app displayed version to `v1.11.23.46`
-          * 🧾 Updated Android `versionName` to `v1.11.23.46`
+          * 🏷️ Updated in-app displayed version to `v1.1.23.46`
+          * 🧾 Updated Android `versionName` to `v1.1.23.46`
           * 📦 Kept `versionCode` at `12346` for safe installation over the previous build
 
           ### 🛠️ Notes
@@ -160,9 +160,9 @@ jobs:
           * ServerLess, Simple Balancer, and Real Xray Scanner logic were preserved while applying targeted stability and cache fixes.
           * This release focuses on stability, lower cache usage, and safer Simple Mode connection handling.
 
-          ## 🚀 سیمُرغ VPN نسخه v1.11.23.46
+          ## 🚀 سیمُرغ VPN نسخه v1.1.23.46
 
-          ### ✨ تغییرات نسبت به نسخه v1.11.23.45
+          ### ✨ تغییرات نسبت به نسخه v1.1.23.45
 
           * 🧠 بهبود پایداری اتصال در بخش **Simple Mode**
           * ⚡ اضافه شدن محافظ برای دکمه **Simple Connect** جهت جلوگیری از اجرای همزمان چند اتصال و کرش‌های تصادفی
@@ -177,8 +177,8 @@ jobs:
           * 🧭 بهینه‌سازی مدیریت فایل‌های `geoip.dat` و `geosite.dat` برای جلوگیری از رشد بی‌دلیل cache
           * 🔒 پاک‌سازی امن‌تر فایل‌های geo فقط زمانی که VPN فعال نیست
           * 📋 حذف متن اضافی از لیست کانفیگ‌های Simple
-          * 🏷️ به‌روزرسانی نسخه نمایش‌داده‌شده داخل برنامه به `v1.11.23.46`
-          * 🧾 به‌روزرسانی Android `versionName` به `v1.11.23.46`
+          * 🏷️ به‌روزرسانی نسخه نمایش‌داده‌شده داخل برنامه به `v1.1.23.46`
+          * 🧾 به‌روزرسانی Android `versionName` به `v1.1.23.46`
           * 📦 حفظ `versionCode` روی `12346` برای نصب امن روی نسخه قبلی
 
           ### 🛠️ توضیحات
@@ -190,7 +190,7 @@ jobs:
           git tag "$TAG" 2>/dev/null || true
           git push origin "$TAG" 2>/dev/null || true
 
-          RELEASE_TITLE="SIMORGH v1.11.23.46"
+          RELEASE_TITLE="SIMORGH v1.1.23.46"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "$RELEASE_TITLE" --notes-file release_notes.md
