@@ -1,4 +1,4 @@
-name: SIMORGH Android Release v1.2.1
+name: SIMORGH Android Signed Release v1.2.1
 
 on:
   workflow_dispatch:
@@ -30,8 +30,8 @@ permissions:
   contents: write
 
 jobs:
-  build-release:
-    name: Build Android Release
+  build-signed-release:
+    name: Build Signed Android Release
     runs-on: ubuntu-latest
 
     env:
@@ -122,6 +122,43 @@ jobs:
         with:
           gradle-version: "9.5.1"
 
+      - name: Validate signing secrets
+        shell: bash
+        run: |
+          set -e
+          missing=0
+
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Missing secret: ANDROID_KEYSTORE_BASE64"
+            missing=1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "Missing secret: ANDROID_KEYSTORE_PASSWORD"
+            missing=1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "Missing secret: ANDROID_KEY_ALIAS"
+            missing=1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "Missing secret: ANDROID_KEY_PASSWORD"
+            missing=1
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Signing secrets are required for signed APK output."
+            exit 1
+          fi
+
+      - name: Decode release keystore
+        shell: bash
+        run: |
+          set -e
+          KEYSTORE_FILE="$RUNNER_TEMP/simorgh-release.jks"
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE"
+          chmod 600 "$KEYSTORE_FILE"
+          echo "KEYSTORE_FILE=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+
       - name: Show build environment
         shell: bash
         working-directory: ${{ env.BUILD_DIR }}
@@ -133,7 +170,7 @@ jobs:
           java -version
           "$GRADLE_CMD" --version
 
-      - name: Build release APK
+      - name: Build unsigned release APK
         shell: bash
         working-directory: ${{ env.BUILD_DIR }}
         run: |
@@ -147,39 +184,68 @@ jobs:
             "$GRADLE_CMD" clean assembleRelease -Psimorgh.refreshXray=true --stacktrace
           fi
 
-      - name: Collect APK outputs
+      - name: Locate Android build tools
         shell: bash
         run: |
           set -e
-          mkdir -p "$GITHUB_WORKSPACE/release-artifacts"
-          find "$BUILD_DIR" -type f -path "*/build/outputs/apk/release/*.apk" -print -exec cp {} "$GITHUB_WORKSPACE/release-artifacts/" \;
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
 
-          if ! find "$GITHUB_WORKSPACE/release-artifacts" -type f -name "*.apk" | grep -q .; then
-            echo "No APK files found under: $BUILD_DIR"
+          if [ -z "$ZIPALIGN" ] || [ -z "$APKSIGNER" ]; then
+            echo "zipalign or apksigner not found in Android SDK build-tools."
+            exit 1
+          fi
+
+          echo "ZIPALIGN=$ZIPALIGN" >> "$GITHUB_ENV"
+          echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
+          echo "zipalign: $ZIPALIGN"
+          echo "apksigner: $APKSIGNER"
+
+      - name: Sign APK outputs
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/signed-release-artifacts"
+
+          mapfile -t unsigned_apks < <(find "$BUILD_DIR" -type f -path "*/build/outputs/apk/release/*.apk" | sort)
+          if [ "${#unsigned_apks[@]}" -eq 0 ]; then
+            echo "No release APK files found under: $BUILD_DIR"
             find "$BUILD_DIR" -maxdepth 7 -type f | sort | sed 's#^# - #'
             exit 1
           fi
 
-          find "$GITHUB_WORKSPACE/release-artifacts" -type f -name "*.apk" -print
-
-      - name: Rename APK files
-        shell: bash
-        run: |
-          shopt -s nullglob
           count=0
-          for apk in "$GITHUB_WORKSPACE"/release-artifacts/*.apk; do
+          for apk in "${unsigned_apks[@]}"; do
             count=$((count + 1))
             base="$(basename "$apk")"
-            safe="${base// /-}"
-            mv "$apk" "$GITHUB_WORKSPACE/release-artifacts/SIMORGH-v${VERSION_NAME}-${count}-${safe}"
-          done
-          ls -lah "$GITHUB_WORKSPACE/release-artifacts"
+            clean_base="${base/-unsigned/}"
+            clean_base="${clean_base// /-}"
+            aligned="$RUNNER_TEMP/aligned-$count-$clean_base"
+            signed="$GITHUB_WORKSPACE/signed-release-artifacts/SIMORGH-v${VERSION_NAME}-$count-signed-$clean_base"
 
-      - name: Upload APK artifact
+            echo "Aligning: $apk"
+            "$ZIPALIGN" -p -f 4 "$apk" "$aligned"
+
+            echo "Signing: $signed"
+            "$APKSIGNER" sign \
+              --ks "$KEYSTORE_FILE" \
+              --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+              --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
+              --out "$signed" \
+              "$aligned"
+
+            echo "Verifying signed APK: $signed"
+            "$APKSIGNER" verify --verbose --print-certs "$signed"
+          done
+
+          ls -lah "$GITHUB_WORKSPACE/signed-release-artifacts"
+
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SIMORGH-v1.2.1-release-artifacts
-          path: release-artifacts/*
+          name: SIMORGH-v1.2.1-signed-release-apk
+          path: signed-release-artifacts/*
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -340,6 +406,6 @@ jobs:
             
             This update is a major stability and feature release focused on the new Fragment mode, safer VPN lifecycle handling, improved MSP/CF behavior, and better Connect/Disconnect reliability.
           files: |
-            release-artifacts/*
+            signed-release-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
