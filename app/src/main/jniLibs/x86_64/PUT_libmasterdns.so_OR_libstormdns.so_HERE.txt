@@ -1,0 +1,1 @@
+Put MasterDNS/StormDNS Android native core here as libmasterdns.so or libstormdns.so to enable MasterDNS mode.
