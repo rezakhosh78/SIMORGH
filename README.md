@@ -1,6 +1,6 @@
 # 🐦‍🔥 SIMORGH VPN
 
-**SIMORGH VPN** is a multi-engine Android VPN client designed for normal connectivity, restricted networks, Iran national intranet conditions, international internet outages RKh-MSP Engine, XRAY configs, and NipoVPN profiles.
+**SIMORGH VPN** is a multi-engine Android VPN client designed for normal connectivity, restricted networks, Iran national intranet conditions, international internet outages, RKh-MSP Engine, XRAY configs, Fragment mode, NipoVPN profiles, and DNS/MasterDNS routing.
 ---
 
 ## ⚠️ Donate
@@ -14,53 +14,59 @@ USDT BEP20:
 This README is based on the latest provided project version:
 
 ```text
-Version Name: 1.1.23.44
-Version Code: 12344
+Version Name: 1.2.1
+Version Code: 1202
 Application ID: com.rkh.simorgh
 Minimum SDK: 29
-Target SDK: 35
+Target SDK: 36
 ```
 
-> ⚠️ Important: if there is no active network at all, no app can connect. However, when Iran's national intranet / local network / domestic routes are still available while international internet access is blocked or heavily restricted, the **Advance** page is designed to scan routes, find clean IPs, and provide a method for accessing websites.
+> ⚠️ Important: if there is no active network at all, no app can connect. However, when Iran's national intranet / local network / domestic routes are still available while international internet access is blocked or heavily restricted, the **MSP** page is designed to scan routes, find clean IPs, and provide a method for accessing websites.
 
 ---
 
 ## ✨ Quick Overview
 
-SIMORGH has three main pages:
+SIMORGH has five main pages:
 
 | Page | Main Purpose |
 |---|---|
+| 🛰️ **MSP** | RKh-MSP Engine, Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
 | 🚀 **Simple** | Fast one-click XRAY config connection |
-| 🧠 **Advance** | RKh-MSP Engine ,Iran national intranet, international outage conditions, IP scanning, Proxy/VPN, and CF Config |
-| 🧩 **NipoVPN** | `nipovpn://` profile support powered by the NipoVPN core |
+| 🧩 **Fragment** | Cloudflare Dirty IP Recovery using VLESS/Trojan conversion, final JSON generation, Address override, and Xray-based Ping |
+| 🟣 **NipoVPN** | `nipovpn://` profile support powered by the NipoVPN core |
+| 🧠 **DNS (MasterDNS)** | DNS-focused routing with MasterDNS client profiles, resolver profiles, logs, and SOCKS bridge support |
 
 ---
 
-## 🔥 Main Features in Version 1.1.23.44
+## 🔥 Main Features in Version 1.2.1
 
+- 🛰️ **MSP** mode for Iran national intranet and international internet outage conditions
 - 🚀 Fast connection through the **Simple** page
-- 🧠 **Advance** mode for Iran national intranet and international internet outage conditions
-- 🧩 Full **NipoVPN** support
+- 🧩 **Fragment** mode for Cloudflare Dirty IP Recovery
+- 🔁 Automatic `vless://` and `trojan://` conversion into valid Xray JSON
+- 🧱 Automatic Fragment/finalmask injection into the final generated JSON
+- ✏️ Editable Fragment parameters: `packets`, `lengths`, `delays`, and `maxSplit`
+- 🌐 Fragment **Address** override for replacing the outbound address inside the final JSON
+- 📡 Real Xray-based Ping for Fragment using the final generated JSON
+- 🟣 Full **NipoVPN** support
+- 🧠 **DNS (MasterDNS)** support
 - 📥 `nipovpn://` profile import
 - 🧾 Save, select, edit, delete, and export NipoVPN profiles
 - 📡 Real Xray ping for Simple configs
 - 🧪 Stable **3x Xray Ping** validation
 - 🧯 Crash Guard for Ping All, background ping scan, and Connect Scan
-- 🔁 **Next Healthy** button to switch to the next healthy config
 - 🧹 **Clear Cache** without deleting configs
-- 📋 Simple config list shown as `Config 1`, `Config 2`, ...
 - 📶 **Ping All** for Simple configs
 - 🇮🇷 **ServerLess (Patterniha)🇮🇷 / IRAN IPS** mode
 - 🌐 Google DNS for Simple Normal mode
 - 🧠 Health and latency cache
 - 📶 Background ping refresh after connection
-- 🛰️ **RKh-MSP** engine in Advance
 - 🔎 ISP and SNI based IP scanning
-- 🧱 Proxy Mode and VPN Mode
+- 🧱 MSP Proxy Mode and MSP VPN Mode
 - 🔌 Local SOCKS5 and HTTP proxy support
-- ☁️ **CF Config** for VLESS WS TLS with IP Memory
-- 💾 IP Memory for saving clean IPs
+- ☁️ **CF Config** for VLESS WS TLS
+- 🧹 **Clear IPs** button inside the MSP Route card
 - 🧭 Routing Strategy selection
 - 📊 Live download/upload speed
 - 🛡️ SIMORGH app is excluded from its own VPN tunnel to prevent loops and improve scanning
@@ -80,14 +86,12 @@ The user does not need to manage complex settings. The app downloads configs fro
 - One-click connection
 - Internal subscription source
 - **Update** button
-- **Next Healthy** button
 - **Clear Cache** button
 - Config count display
 - Selected config display
 - Ping display
 - Connection timer
 - Config list opens by tapping the Config area
-- Original config names are hidden and shown as `Config 1`, `Config 2`, ...
 - **Ping All** button
 - Connect to a specific config from the list
 - ServerLess support
@@ -107,7 +111,6 @@ Normal mode features:
 - Tests configs using Xray Ping
 - Connects to the first reachable config
 - Continues scanning after connecting
-- Prepares cache for Next Healthy
 - Uses Google DNS:
 
 ```text
@@ -133,19 +136,19 @@ ServerLess usage:
 - Runs Xray with a TUN/tun2socks compatible structure
 - Useful when the ServerLess config works better than normal subscription configs
 
-> ServerLess usually has only one config, so **Next Healthy** is disabled for ServerLess and is intended for Simple Normal mode.
+> ServerLess usually has only one config and is intended for direct ServerLess connection mode.
 
 ---
 
-## 2. 🧠 Advance
+## 2. 🛰️ MSP
 
-The **Advance** page is the key section for special Iran network conditions.
+The **MSP** page is the key section for special Iran network conditions.
 
-It is designed for cases where international internet access is blocked, heavily restricted, or unstable, while Iran's national intranet / domestic network / local routes are still available. In such cases, Advance uses the **RKh-MSP** engine, IP scanning, SNI selection, and route building to provide a method for accessing websites.
+It is designed for cases where international internet access is blocked, heavily restricted, or unstable, while Iran's national intranet / domestic network / local routes are still available. In such cases, MSP uses the **RKh-MSP** engine, IP scanning, SNI selection, and route building to provide a method for accessing websites.
 
-> ✅ **Advance is suitable for Iran national intranet conditions, full international internet outages, and severe internet restrictions, as long as the local network or required route is still available.**
+> ✅ **MSP is suitable for Iran national intranet conditions, full international internet outages, and severe internet restrictions, as long as the local network or required route is still available.**
 
-### Advance Features
+### MSP Features
 
 - **RKh-MSP** engine
 - ISP selection
@@ -158,10 +161,9 @@ It is designed for cases where international internet access is blocked, heavily
 - VPN Mode
 - Internal SOCKS5 proxy
 - Internal HTTP proxy
-- IP Memory
+- saved clean IPs
 - Next IP
 - Ping All for clean IPs
-- Copy and Clear for IP Memory
 - Routing Strategy
 - CF Config for VLESS
 - Active route display
@@ -170,7 +172,7 @@ It is designed for cases where international internet access is blocked, heavily
 - Background scanning
 - SIMORGH is excluded from its own VPN tunnel for more accurate scanning
 
-### Proxy Mode in Advance
+### Proxy Mode in MSP
 
 In **Proxy Mode**, the app only starts the local proxy.
 
@@ -188,7 +190,7 @@ Proxy Mode is useful for:
 - Debugging
 - Cases where only a local proxy is needed
 
-### VPN Mode in Advance
+### VPN Mode in MSP
 
 In **VPN Mode**, all Android traffic is routed through SIMORGH.
 
@@ -213,7 +215,7 @@ VPN Mode is useful for:
 - Using discovered clean IPs
 - Easier usage compared to Proxy Mode
 
-### Advance Settings
+### MSP Settings
 
 Settings are available from the Settings icon.
 
@@ -244,7 +246,7 @@ You can manually paste IPs, CIDR ranges, or IP ranges.
 When Manual IP mode is enabled:
 
 - ISP range scanning is skipped
-- Manual IPs are merged into IP Memory
+- Manual IPs are tested by the app
 - The app tests only the provided manual IPs
 
 #### Scan
@@ -284,7 +286,71 @@ Available routing strategies:
 
 ---
 
-## 3. 🧩 NipoVPN
+## 3. 🧩 Fragment
+
+The **Fragment** page is designed for Cloudflare Dirty IP Recovery using plain VLESS or Trojan configs.
+
+The user can paste a simple `vless://` or `trojan://` link. SIMORGH converts it into valid Xray JSON, applies the optional Address override, injects Fragment/finalmask settings, validates the final JSON, and then starts Xray with the generated configuration.
+
+Displayed subtitle:
+
+```text
+Cloudflare Dirty IP Recovery
+```
+
+### Fragment Features
+
+- Dedicated **Fragment** tab
+- Supports plain `vless://` links
+- Supports plain `trojan://` links
+- Converts VLESS/Trojan links into valid Xray JSON
+- Injects Fragment/finalmask settings into the final generated JSON
+- Keeps JSON parsing safe by using structured JSON generation instead of manual text concatenation
+- Address override field for replacing the outbound address inside the final JSON
+- Effective Address display from the generated JSON
+- Ping display
+- Real Xray-based Ping using the final generated JSON
+- Large Connect/Disconnect button
+- Fragment connection status in the header
+- Hidden/expandable **Fragment Setting** panel
+- Editable Fragment parameters
+
+### Editable Fragment Parameters
+
+Inside **Fragment Setting**, these values can be edited:
+
+- `packets`
+- `lengths`
+- `delays`
+- `maxSplit`
+
+### Fragment Final JSON Behavior
+
+Fragment mode builds the final Xray JSON in this order:
+
+```text
+VLESS/Trojan link
+   ↓
+Convert to valid Xray JSON
+   ↓
+Apply Address override if provided
+   ↓
+Inject Fragment/finalmask settings
+   ↓
+Validate final JSON
+   ↓
+Run Xray
+```
+
+### Fragment Ping
+
+The **Ping** button does not test the raw VLESS/Trojan link directly.
+
+Instead, SIMORGH builds the final JSON, starts a temporary Xray process with it, sends test traffic through Xray, and shows the final route latency.
+
+---
+
+## 4. 🟣 NipoVPN
 
 The **NipoVPN** page is one of the most important additions in the latest SIMORGH version.
 
@@ -366,6 +432,43 @@ After importing a profile, these fields can be edited:
 
 ---
 
+## 5. 🧠 DNS (MasterDNS)
+
+The **DNS (MasterDNS)** page provides DNS-focused routing and resolver profile management.
+
+It is designed for cases where DNS behavior, resolver selection, DNS bridge behavior, or DNS-related routing needs to be controlled separately from the main MSP, Simple, Fragment, and NipoVPN modes.
+
+### DNS (MasterDNS) Features
+
+- Dedicated **DNS** tab
+- MasterDNS client profile management
+- Resolver profile management
+- Import resolver list
+- Save resolver profile
+- Add resolver profile
+- Select resolver profile
+- Delete resolver profile
+- Refresh logs
+- Clear logs
+- SOCKS bridge support
+- DNS status display
+- Connection state display in the header
+- Safer service lifecycle handling during Stop/Destroy
+
+### MasterDNS Modes
+
+MasterDNS can be used as a DNS-focused helper mode for routing and resolver testing.
+
+Typical usage includes:
+
+- Testing resolver behavior
+- Managing resolver profiles
+- Checking DNS logs
+- Using DNS bridge behavior with local SOCKS routing
+- Troubleshooting DNS-related connection problems
+
+---
+
 # ☁️ CF Config
 
 **CF Config** is available inside the Advance page.
@@ -376,14 +479,14 @@ Displayed title:
 
 ```text
 CF Config
-Clouflare Vless Ws TLS Config
+Cloudflare VLESS WS TLS Config
 ```
 
 ### CF Config Features
 
 - Enable/disable CF Config
 - Paste VLESS config
-- Use clean IPs from IP Memory
+- Use clean IPs from MSP scan results
 - Test latency for IPs
 - **Latency All** button
 - **Connect** button
@@ -392,23 +495,6 @@ Clouflare Vless Ws TLS Config
 
 > In CF Config, only the VLESS address is replaced by the clean IP. SNI, Host, and Path remain from the original config.
 
----
-
-# 💾 IP Memory
-
-**IP Memory** stores and manages clean IPs.
-
-### IP Memory Features
-
-- Displays number of clean IPs
-- Shows latency when available
-- **Show / Hide** button
-- **Ping All** button
-- **Copy** button
-- **Clear** button
-- Used by Advance
-- Used by CF Config
-- Keeps clean IPs for later connections
 
 ---
 
@@ -424,8 +510,10 @@ SIMORGH displays live traffic speed:
 This is used in:
 
 - Simple XRAY
-- Advance VPN / Proxy
+- MSP VPN / Proxy
+- Fragment
 - NipoVPN
+- DNS (MasterDNS)
 
 ---
 
@@ -441,6 +529,8 @@ For better Simple stability, this README includes the following improvements:
 - Cancels the previous Simple background ping scan before starting a new Connect scan
 - Guards latency-cache writes
 - Guards worker channel sends
+- Safer Simple Connect/Disconnect state handling
+- ServerLess Disconnect crash protection
 
 ---
 
@@ -457,7 +547,6 @@ For better Simple stability, this README includes the following improvements:
 7. The app tests configs using real Xray Ping.
 8. The first reachable config is selected.
 9. After connection, background scanning continues.
-10. If the connection becomes weak, tap **Next Healthy**.
 
 ### Using Clear Cache in Simple
 
@@ -478,15 +567,33 @@ When ping results look wrong or a config has ping but does not connect:
 4. Tap Connect.
 5. The app runs the bundled internal ServerLess config.
 
-> ServerLess usually has one config, so Next Healthy is not useful for this mode.
+> ServerLess usually has one config and is intended for direct ServerLess connection mode.
 
 ---
 
-## 🧠 How to Use Advance During Iran National Intranet / International Internet Outage
+## 🧩 How to Use Fragment
+
+1. Open the **Fragment** tab.
+2. Paste a `vless://` or `trojan://` config.
+3. Optional: enter an IP or domain in the **Address** field.
+4. Tap **Ping** to test the final generated JSON through Xray.
+5. Open **Fragment Setting** only if you want to edit fragment values.
+6. Tap the big Connect button.
+7. The app converts the config, injects Fragment/finalmask settings, validates the final JSON, and starts Xray.
+8. The header should show:
+
+```text
+Fragment Connected
+```
+
+
+---
+
+## 🛰️ How to Use MSP During Iran National Intranet / International Internet Outage
 
 Use this method when international internet access is blocked or heavily restricted, but Iran national intranet / local network is still available.
 
-1. Open the **Advance** tab.
+1. Open the **MSP** tab.
 2. Open **Settings**.
 3. Choose an ISP from the **ISP** section.
 4. Choose one or more SNI values from the **SNI** section.
@@ -507,7 +614,7 @@ Use this method when international internet access is blocked or heavily restric
 
 ## 🔌 How to Use Proxy Mode with v2rayNG
 
-1. Open **Advance** in SIMORGH.
+1. Open **MSP** in SIMORGH.
 2. Select **Proxy** mode.
 3. Go to Settings > Proxy and choose:
    - SOCKS5
@@ -549,9 +656,23 @@ NipoVPN connected
 
 ---
 
+## 🧠 How to Use DNS (MasterDNS)
+
+1. Open the **DNS** tab.
+2. Select or create a MasterDNS profile.
+3. Import or select resolver profiles if needed.
+4. Save the profile after editing values.
+5. Tap Connect.
+6. Use **Refresh Logs** to check runtime status.
+7. Use **Clear Logs** when you want a clean log view.
+8. Disconnect when DNS/MasterDNS testing is finished.
+
+
+---
+
 ## ☁️ How to Use CF Config
 
-1. First run Advance scanning so IP Memory is filled.
+1. First run MSP scanning so clean IPs are available.
 2. Open **CF Config**.
 3. Enable CF Config.
 4. Paste your VLESS WS TLS config.
@@ -571,14 +692,7 @@ NipoVPN connected
 - Tap Ping All
 - Tap Clear Cache
 - Try Connect again
-- Use Next Healthy if you have cached healthy configs
 - Test ServerLess ON/OFF
-
-## Next Healthy does not work
-
-- Next Healthy is only for Simple Normal
-- Run Ping All first
-- If healthy cache is empty, the app will ask you to run Ping All
 
 ## ServerLess does not connect
 
@@ -587,7 +701,16 @@ NipoVPN connected
 - Run Connect again
 - Remember that ServerLess usually has only one config
 
-## Advance does not work during Iran national intranet conditions
+## Fragment does not connect
+
+- Make sure the config starts with `vless://` or `trojan://`
+- Check the Address field if you are overriding the outbound address
+- Tap Ping first to test the final generated JSON
+- Open Fragment Setting and reset values if you changed them
+- Try another IP or domain in the Address field
+- Disconnect and connect again
+
+## MSP does not work during Iran national intranet conditions
 
 - Change ISP
 - Change SNI
@@ -595,7 +718,7 @@ NipoVPN connected
 - Change Scan Speed
 - Test Proxy Mode separately with v2rayNG
 - Change Route Strategy
-- Clear IP Memory and scan again
+- Clear saved clean IPs and scan again
 
 ## NipoVPN does not connect
 
@@ -607,9 +730,18 @@ NipoVPN connected
 - Tap Save Profile
 - Connect again
 
+## DNS (MasterDNS) does not connect
+
+- Check the selected MasterDNS profile
+- Check resolver profiles
+- Refresh logs and review the latest error
+- Try another resolver profile
+- Clear logs and connect again
+- Disconnect and restart the DNS mode if the runtime state looks stuck
+
 ## CF Config does not work
 
-- Fill IP Memory through Advance first
+- Fill saved clean IPs through Advance first
 - Make sure the config starts with `vless://`
 - Tap Latency All
 - Choose a healthier IP
@@ -649,7 +781,23 @@ Xray mixed inbound
 ServerLess routing
 ```
 
-### Advance VPN Mode
+### Fragment
+
+```text
+VLESS / Trojan link
+   ↓
+Generated Xray JSON
+   ↓
+Address override
+   ↓
+Fragment/finalmask settings
+   ↓
+Xray
+   ↓
+Android TUN / tun2socks
+```
+
+### MSP VPN Mode
 
 ```text
 Android TUN
@@ -663,7 +811,7 @@ RKh-MSP Local Proxy
 Clean IP Pool
 ```
 
-### Advance Proxy Mode
+### MSP Proxy Mode
 
 ```text
 Local App / v2rayNG
@@ -673,6 +821,20 @@ or
 127.0.0.1:9991 HTTP
    ↓
 RKh-MSP Clean IP Pool
+```
+
+### DNS (MasterDNS)
+
+```text
+MasterDNS profile
+   ↓
+Resolver profile
+   ↓
+MasterDNS runtime
+   ↓
+Local SOCKS / DNS bridge
+   ↓
+Xray bridge when needed
 ```
 
 ### NipoVPN
@@ -695,9 +857,11 @@ NipoVPN Agent
 
 1. Install the APK.
 2. Grant VPN permission.
-3. Use **Simple** for fast XRAY connection.
-4. Use **Advance** for Iran national intranet and international internet outage conditions.
-5. Use **NipoVPN** for `nipovpn://` profiles.
+3. Use **MSP** for Iran national intranet and international internet outage conditions.
+4. Use **Simple** for fast XRAY connection.
+5. Use **Fragment** for Cloudflare Dirty IP Recovery with VLESS/Trojan configs.
+6. Use **NipoVPN** for `nipovpn://` profiles.
+7. Use **DNS (MasterDNS)** for DNS-focused routing and resolver profile testing.
 
 ---
 
@@ -731,6 +895,5 @@ If SIMORGH is useful to you, please give the project a ⭐ on GitHub.
 
 ```text
 SIMORGH VPN
-Fast. Smart. Advanced. NipoVPN Ready.
+Fast. Smart. MSP. Fragment, DNS, and NipoVPN Ready.
 ```
-
