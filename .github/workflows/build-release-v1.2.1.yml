@@ -122,67 +122,63 @@ jobs:
         with:
           gradle-version: "9.5.1"
 
-      - name: Secret availability diagnostics
-        shell: bash
-        env:
-          HAS_ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-          HAS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
-          HAS_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
-          HAS_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
-        run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Event: $GITHUB_EVENT_NAME"
-          echo "ANDROID_KEYSTORE_BASE64 available: $HAS_ANDROID_KEYSTORE_BASE64"
-          echo "ANDROID_KEYSTORE_PASSWORD available: $HAS_ANDROID_KEYSTORE_PASSWORD"
-          echo "ANDROID_KEY_ALIAS available: $HAS_ANDROID_KEY_ALIAS"
-          echo "ANDROID_KEY_PASSWORD available: $HAS_ANDROID_KEY_PASSWORD"
-
       - name: Validate signing secrets
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -e
           missing=0
 
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "Missing secret: ANDROID_KEYSTORE_BASE64"
+          if [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "Missing secret: SIGNING_KEYSTORE_BASE64"
             missing=1
+          else
+            echo "SIGNING_KEYSTORE_BASE64 is set"
           fi
-          if [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
-            echo "Missing secret: ANDROID_KEYSTORE_PASSWORD"
+
+          if [ -z "$SIGNING_STORE_PASSWORD" ]; then
+            echo "Missing secret: SIGNING_STORE_PASSWORD"
             missing=1
+          else
+            echo "SIGNING_STORE_PASSWORD is set"
           fi
-          if [ -z "$ANDROID_KEY_ALIAS" ]; then
-            echo "Missing secret: ANDROID_KEY_ALIAS"
+
+          if [ -z "$SIGNING_KEY_ALIAS" ]; then
+            echo "Missing secret: SIGNING_KEY_ALIAS"
             missing=1
+          else
+            echo "SIGNING_KEY_ALIAS is set"
           fi
-          if [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Missing secret: ANDROID_KEY_PASSWORD"
+
+          if [ -z "$SIGNING_KEY_PASSWORD" ]; then
+            echo "Missing secret: SIGNING_KEY_PASSWORD"
             missing=1
+          else
+            echo "SIGNING_KEY_PASSWORD is set"
           fi
 
           if [ "$missing" -ne 0 ]; then
             echo "Signing secrets are required for signed APK output."
-            echo "Start a brand-new workflow_dispatch run after creating/editing secrets."
-            echo "Do not only re-run an old failed job."
-            echo "Repository secrets are read when a workflow run is queued."
+            echo "Expected secret names:"
+            echo "SIGNING_KEYSTORE_BASE64"
+            echo "SIGNING_STORE_PASSWORD"
+            echo "SIGNING_KEY_ALIAS"
+            echo "SIGNING_KEY_PASSWORD"
             exit 1
           fi
-
-          echo "All signing secrets are available."
 
       - name: Decode release keystore
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: |
           set -e
           KEYSTORE_FILE="$RUNNER_TEMP/simorgh-release.jks"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_FILE"
           chmod 600 "$KEYSTORE_FILE"
           echo "KEYSTORE_FILE=$KEYSTORE_FILE" >> "$GITHUB_ENV"
 
@@ -231,9 +227,9 @@ jobs:
       - name: Sign APK outputs
         shell: bash
         env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/signed-release-artifacts"
@@ -254,13 +250,15 @@ jobs:
             aligned="$RUNNER_TEMP/aligned-$count-$clean_base"
             signed="$GITHUB_WORKSPACE/signed-release-artifacts/SIMORGH-v${VERSION_NAME}-$count-signed-$clean_base"
 
+            echo "Aligning: $apk"
             "$ZIPALIGN" -p -f 4 "$apk" "$aligned"
 
+            echo "Signing: $signed"
             "$APKSIGNER" sign \
               --ks "$KEYSTORE_FILE" \
-              --ks-key-alias "$ANDROID_KEY_ALIAS" \
-              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
-              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --ks-key-alias "$SIGNING_KEY_ALIAS" \
+              --ks-pass "pass:$SIGNING_STORE_PASSWORD" \
+              --key-pass "pass:$SIGNING_KEY_PASSWORD" \
               --out "$signed" \
               "$aligned"
 
@@ -299,7 +297,6 @@ jobs:
             * تبدیل خودکار لینک `vless://` و `trojan://` به فایل JSON معتبر Xray.
             * اضافه شدن خودکار بلوک `finalmask.tcp.fragment` به JSON نهایی بدون خراب شدن ساختار JSON.
             * امکان تغییر مقدارهای Fragment توسط کاربر:
-            
               * `packets`
               * `lengths`
               * `delays`
@@ -309,11 +306,6 @@ jobs:
             * اضافه شدن Ping واقعی با Xray بر اساس JSON نهایی، نه لینک خام VLESS/Trojan.
             * اصلاح مشکل Connect که ابتدا وصل، سپس Disconnect و بعد دوباره Connect می‌شد.
             * امن‌سازی دکمه Connect/Disconnect بخش Fragment برای جلوگیری از کرش.
-            * اضافه شدن وضعیت Fragment در هدر:
-            
-              * `Fragment Connected`
-              * `Fragment Connecting`
-              * `Fragment Disconnect`
             
             ### 🌐 بهبودهای MSP
             
@@ -328,7 +320,6 @@ jobs:
             * بهبود پایداری Connect و Disconnect.
             * اصلاح کرش هنگام Disconnect در حالت ServerLess.
             * حفظ عملکرد ServerLess بدون تغییر در منطق اصلی.
-            * اصلاح مشکلات مربوط به تغییر کانفیگ بدون دست‌زدن به هسته‌ی اصلی Balancer.
             * بهبود مدیریت state هنگام اتصال و قطع اتصال.
             
             ### 🟣 NipoVPN
@@ -336,13 +327,11 @@ jobs:
             * اصلاح کرش هنگام Disconnect.
             * امن‌سازی مسیر Stop سرویس NipoVPN.
             * جلوگیری از اجرای دوباره‌ی سریع Disconnect با debounce.
-            * حفظ تنظیمات و ساختار اصلی NipoVPN.
             
             ### 🧠 MasterDNS
             
             * حفظ ساختار MasterDNS بدون تغییر در منطق اصلی.
             * بهبودهای ایمنی در lifecycle سرویس‌ها برای جلوگیری از کرش هنگام Stop/Destroy.
-            * حفظ مسیرهای DNS/QUIC/Resolver قبلی.
             
             ### 🎨 UI / UX
             
@@ -356,7 +345,6 @@ jobs:
             * به‌روزرسانی مسیر دانلود Xray به نسخه `v26.6.22`.
             * فعال شدن refresh پیش‌فرض Xray برای جلوگیری از استفاده از نسخه کش‌شده قدیمی.
             * بهبود مدیریت native processها هنگام Stop/Start.
-            * امن‌تر شدن lifecycle سرویس‌های VPN.
             
             ---
             
@@ -370,21 +358,14 @@ jobs:
             * Automatically converts `vless://` and `trojan://` links into valid Xray JSON.
             * Automatically injects the `finalmask.tcp.fragment` block into the final JSON without breaking JSON parsing.
             * Fragment parameters are now editable by the user:
-            
               * `packets`
               * `lengths`
               * `delays`
               * `maxSplit`
             * Added an **Address** override field to replace the outbound address inside the final JSON.
-            * Displays the effective address from the generated JSON.
-            * Added real Xray-based Ping using the final generated JSON, not the raw VLESS/Trojan link.
+            * Added real Xray-based Ping using the final generated JSON.
             * Fixed Fragment Connect behavior where it could connect, disconnect, then reconnect again.
             * Hardened Fragment Connect/Disconnect button to prevent crashes.
-            * Added Fragment connection status in the header:
-            
-              * `Fragment Connected`
-              * `Fragment Connecting`
-              * `Fragment Disconnect`
             
             ### 🌐 MSP Improvements
             
@@ -399,7 +380,6 @@ jobs:
             * Improved Connect and Disconnect stability.
             * Fixed Disconnect crash in ServerLess mode.
             * Preserved ServerLess core behavior without changing its main logic.
-            * Improved config switching safety without changing the Balancer core.
             * Improved state handling during connect/disconnect.
             
             ### 🟣 NipoVPN
@@ -407,32 +387,29 @@ jobs:
             * Fixed NipoVPN Disconnect crash.
             * Hardened NipoVPN service stop path.
             * Added duplicate disconnect tap protection.
-            * Preserved the original NipoVPN logic and configuration structure.
             
             ### 🧠 MasterDNS
             
             * Preserved MasterDNS logic and routing behavior.
-            * Added safer service lifecycle handling to reduce crashes during Stop/Destroy.
-            * Kept existing DNS/QUIC/Resolver behavior intact.
+            * Added safer service lifecycle handling.
             
             ### 🎨 UI / UX
             
             * Improved connection status display in the header.
             * Reworked Fragment text, button placement, Ping, and Address display.
-            * Improved Connect/Disconnect button behavior across affected sections.
+            * Improved Connect/Disconnect button behavior.
             
             ### 🧰 Build / Core
             
             * Updated Xray download target to `v26.6.22`.
-            * Enabled default Xray refresh to avoid using old cached binaries.
+            * Enabled default Xray refresh.
             * Improved native process cleanup during Stop/Start.
-            * Hardened VPN service lifecycle behavior.
             
             ---
             
             ## ✅ Summary
             
-            This update is a major stability and feature release focused on the new Fragment mode, safer VPN lifecycle handling, improved MSP/CF behavior, and better Connect/Disconnect reliability.
+            This update is focused on Fragment mode, safer VPN lifecycle handling, improved MSP/CF behavior, and better Connect/Disconnect reliability.
           files: |
             signed-release-artifacts/*
         env:
