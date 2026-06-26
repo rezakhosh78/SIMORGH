@@ -1,0 +1,265 @@
+name: SIMORGH Android Release v1.2.1
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag"
+        required: true
+        default: "v1.2.1"
+      release_name:
+        description: "GitHub Release title"
+        required: true
+        default: "SIMORGH VPN v1.2.1"
+      prerelease:
+        description: "Mark as pre-release"
+        required: true
+        type: boolean
+        default: false
+
+  push:
+    tags:
+      - "v1.2.1"
+      - "v1.2.1-*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Android Release
+    runs-on: ubuntu-latest
+
+    env:
+      VERSION_NAME: "1.2.1"
+      XRAY_VERSION: "v26.6.22"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
+      SIMORGH_REFRESH_XRAY: "true"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+
+      - name: Show build environment
+        run: |
+          echo "SIMORGH_VERSION=${VERSION_NAME}"
+          echo "XRAY_VERSION=${XRAY_VERSION}"
+          java -version
+          if [ -f "./gradlew" ]; then
+            ./gradlew --version
+          else
+            gradle --version
+          fi
+
+      - name: Build release APK
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew clean :app:assembleRelease -Psimorgh.refreshXray=true --stacktrace
+          else
+            gradle clean :app:assembleRelease -Psimorgh.refreshXray=true --stacktrace
+          fi
+
+      - name: Collect APK outputs
+        run: |
+          mkdir -p release-artifacts
+          find . -type f -path "*/build/outputs/apk/release/*.apk" -print -exec cp {} release-artifacts/ \;
+          find release-artifacts -type f -name "*.apk" -print
+
+      - name: Rename APK files
+        run: |
+          shopt -s nullglob
+          count=0
+          for apk in release-artifacts/*.apk; do
+            count=$((count + 1))
+            base="$(basename "$apk")"
+            safe="${base// /-}"
+            mv "$apk" "release-artifacts/SIMORGH-v${VERSION_NAME}-${count}-${safe}"
+          done
+          ls -lah release-artifacts
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SIMORGH-v1.2.1-release-artifacts
+          path: release-artifacts/*
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: ${{ github.event.inputs.release_name || 'SIMORGH VPN v1.2.1' }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          body: |
+            # 🚀 SIMORGH VPN v1.2.1
+            
+            ## Changelog from v1.1.23.46
+            
+            ---
+            
+            ## 🇮🇷 فارسی
+            
+            ### 🧩 بخش جدید Fragment
+            
+            * اضافه شدن صفحه‌ی جدید **Fragment**.
+            * ارتقای مسیر دانلود هسته Xray به **Xray-core v26.6.22**.
+            * پشتیبانی از کانفیگ‌های ساده‌ی `VLESS` و `Trojan`.
+            * تبدیل خودکار لینک `vless://` و `trojan://` به فایل JSON معتبر Xray.
+            * اضافه شدن خودکار بلوک `finalmask.tcp.fragment` به JSON نهایی بدون خراب شدن ساختار JSON.
+            * امکان تغییر مقدارهای Fragment توسط کاربر:
+            
+              * `packets`
+              * `lengths`
+              * `delays`
+              * `maxSplit`
+            * اضافه شدن فیلد **Address** برای جایگزین کردن IP یا دامنه در JSON نهایی.
+            * نمایش Address نهایی از روی فایل JSON ساخته‌شده.
+            * اضافه شدن Ping واقعی با Xray بر اساس JSON نهایی، نه لینک خام VLESS/Trojan.
+            * اصلاح مشکل Connect که ابتدا وصل، سپس Disconnect و بعد دوباره Connect می‌شد.
+            * امن‌سازی دکمه Connect/Disconnect بخش Fragment برای جلوگیری از کرش.
+            * اضافه شدن وضعیت Fragment در هدر:
+            
+              * `Fragment Connected`
+              * `Fragment Connecting`
+              * `Fragment Disconnect`
+            
+            ### 🌐 بهبودهای MSP
+            
+            * اصلاح چندین کرش هنگام Connect و Disconnect در MSP.
+            * اصلاح مشکل Disconnect در بخش MSP.
+            * اصلاح Connect بین کانفیگ‌های CF Config.
+            * اصلاح Disconnect بعد از اتصال از CF Config.
+            * اضافه شدن دکمه `Clear IPs` در کارت MSP Route برای پاک‌کردن IP cache.
+            
+            ### ⚡ Simple Xray
+            
+            * بهبود پایداری Connect و Disconnect.
+            * اصلاح کرش هنگام Disconnect در حالت ServerLess.
+            * حفظ عملکرد ServerLess بدون تغییر در منطق اصلی.
+            * اصلاح مشکلات مربوط به تغییر کانفیگ بدون دست‌زدن به هسته‌ی اصلی Balancer.
+            * بهبود مدیریت state هنگام اتصال و قطع اتصال.
+            
+            ### 🟣 NipoVPN
+            
+            * اصلاح کرش هنگام Disconnect.
+            * امن‌سازی مسیر Stop سرویس NipoVPN.
+            * جلوگیری از اجرای دوباره‌ی سریع Disconnect با debounce.
+            * حفظ تنظیمات و ساختار اصلی NipoVPN.
+            
+            ### 🧠 MasterDNS
+            
+            * حفظ ساختار MasterDNS بدون تغییر در منطق اصلی.
+            * بهبودهای ایمنی در lifecycle سرویس‌ها برای جلوگیری از کرش هنگام Stop/Destroy.
+            * حفظ مسیرهای DNS/QUIC/Resolver قبلی.
+            
+            ### 🎨 UI / UX
+            
+            * بهبود نمایش وضعیت اتصال در هدر.
+            * تغییر متن‌ها و جای‌گذاری دکمه‌ها در بخش Fragment.
+            * ثابت‌تر شدن رفتار دکمه‌های Connect/Disconnect.
+            * اصلاح نمایش Ping و Address در بخش Fragment.
+            
+            ### 🧰 Build / Core
+            
+            * به‌روزرسانی مسیر دانلود Xray به نسخه `v26.6.22`.
+            * فعال شدن refresh پیش‌فرض Xray برای جلوگیری از استفاده از نسخه کش‌شده قدیمی.
+            * بهبود مدیریت native processها هنگام Stop/Start.
+            * امن‌تر شدن lifecycle سرویس‌های VPN.
+            
+            ---
+            
+            ## 🇬🇧 English
+            
+            ### 🧩 New Fragment Section
+            
+            * Added a new **Fragment** page.
+            * Updated Xray download target to **Xray-core v26.6.22**.
+            * Added support for plain `VLESS` and `Trojan` links.
+            * Automatically converts `vless://` and `trojan://` links into valid Xray JSON.
+            * Automatically injects the `finalmask.tcp.fragment` block into the final JSON without breaking JSON parsing.
+            * Fragment parameters are now editable by the user:
+            
+              * `packets`
+              * `lengths`
+              * `delays`
+              * `maxSplit`
+            * Added an **Address** override field to replace the outbound address inside the final JSON.
+            * Displays the effective address from the generated JSON.
+            * Added real Xray-based Ping using the final generated JSON, not the raw VLESS/Trojan link.
+            * Fixed Fragment Connect behavior where it could connect, disconnect, then reconnect again.
+            * Hardened Fragment Connect/Disconnect button to prevent crashes.
+            * Added Fragment connection status in the header:
+            
+              * `Fragment Connected`
+              * `Fragment Connecting`
+              * `Fragment Disconnect`
+            
+            ### 🌐 MSP Improvements
+            
+            * Fixed multiple MSP Connect/Disconnect crashes.
+            * Improved MSP Disconnect stability.
+            * Fixed crashes when switching between CF Config connections.
+            * Fixed Disconnect after connecting through CF Config.
+            * Added `Clear IPs` button inside the MSP Route card.
+            
+            ### ⚡ Simple Xray
+            
+            * Improved Connect and Disconnect stability.
+            * Fixed Disconnect crash in ServerLess mode.
+            * Preserved ServerLess core behavior without changing its main logic.
+            * Improved config switching safety without changing the Balancer core.
+            * Improved state handling during connect/disconnect.
+            
+            ### 🟣 NipoVPN
+            
+            * Fixed NipoVPN Disconnect crash.
+            * Hardened NipoVPN service stop path.
+            * Added duplicate disconnect tap protection.
+            * Preserved the original NipoVPN logic and configuration structure.
+            
+            ### 🧠 MasterDNS
+            
+            * Preserved MasterDNS logic and routing behavior.
+            * Added safer service lifecycle handling to reduce crashes during Stop/Destroy.
+            * Kept existing DNS/QUIC/Resolver behavior intact.
+            
+            ### 🎨 UI / UX
+            
+            * Improved connection status display in the header.
+            * Reworked Fragment text, button placement, Ping, and Address display.
+            * Improved Connect/Disconnect button behavior across affected sections.
+            
+            ### 🧰 Build / Core
+            
+            * Updated Xray download target to `v26.6.22`.
+            * Enabled default Xray refresh to avoid using old cached binaries.
+            * Improved native process cleanup during Stop/Start.
+            * Hardened VPN service lifecycle behavior.
+            
+            ---
+            
+            ## ✅ Summary
+            
+            This update is a major stability and feature release focused on the new Fragment mode, safer VPN lifecycle handling, improved MSP/CF behavior, and better Connect/Disconnect reliability.
+          files: |
+            release-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
