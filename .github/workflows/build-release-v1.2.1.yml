@@ -39,10 +39,6 @@ jobs:
       XRAY_VERSION: "v26.6.22"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout source
@@ -126,8 +122,28 @@ jobs:
         with:
           gradle-version: "9.5.1"
 
+      - name: Secret availability diagnostics
+        shell: bash
+        env:
+          HAS_ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+          HAS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          HAS_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+          HAS_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "ANDROID_KEYSTORE_BASE64 available: $HAS_ANDROID_KEYSTORE_BASE64"
+          echo "ANDROID_KEYSTORE_PASSWORD available: $HAS_ANDROID_KEYSTORE_PASSWORD"
+          echo "ANDROID_KEY_ALIAS available: $HAS_ANDROID_KEY_ALIAS"
+          echo "ANDROID_KEY_PASSWORD available: $HAS_ANDROID_KEY_PASSWORD"
+
       - name: Validate signing secrets
         shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -e
           missing=0
@@ -135,41 +151,34 @@ jobs:
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "Missing secret: ANDROID_KEYSTORE_BASE64"
             missing=1
-          else
-            echo "ANDROID_KEYSTORE_BASE64 is set"
           fi
-
           if [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
             echo "Missing secret: ANDROID_KEYSTORE_PASSWORD"
             missing=1
-          else
-            echo "ANDROID_KEYSTORE_PASSWORD is set"
           fi
-
           if [ -z "$ANDROID_KEY_ALIAS" ]; then
             echo "Missing secret: ANDROID_KEY_ALIAS"
             missing=1
-          else
-            echo "ANDROID_KEY_ALIAS is set"
           fi
-
           if [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "Missing secret: ANDROID_KEY_PASSWORD"
             missing=1
-          else
-            echo "ANDROID_KEY_PASSWORD is set"
           fi
 
           if [ "$missing" -ne 0 ]; then
             echo "Signing secrets are required for signed APK output."
-            echo "Make sure this workflow is running in repository: $GITHUB_REPOSITORY"
-            echo "Repository secrets must be created in: Settings > Secrets and variables > Actions"
-            echo "Do not run signed release from a fork pull_request because GitHub does not pass secrets there."
+            echo "Start a brand-new workflow_dispatch run after creating/editing secrets."
+            echo "Do not only re-run an old failed job."
+            echo "Repository secrets are read when a workflow run is queued."
             exit 1
           fi
 
+          echo "All signing secrets are available."
+
       - name: Decode release keystore
         shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           set -e
           KEYSTORE_FILE="$RUNNER_TEMP/simorgh-release.jks"
@@ -218,11 +227,13 @@ jobs:
 
           echo "ZIPALIGN=$ZIPALIGN" >> "$GITHUB_ENV"
           echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
-          echo "zipalign: $ZIPALIGN"
-          echo "apksigner: $APKSIGNER"
 
       - name: Sign APK outputs
         shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/signed-release-artifacts"
@@ -243,10 +254,8 @@ jobs:
             aligned="$RUNNER_TEMP/aligned-$count-$clean_base"
             signed="$GITHUB_WORKSPACE/signed-release-artifacts/SIMORGH-v${VERSION_NAME}-$count-signed-$clean_base"
 
-            echo "Aligning: $apk"
             "$ZIPALIGN" -p -f 4 "$apk" "$aligned"
 
-            echo "Signing: $signed"
             "$APKSIGNER" sign \
               --ks "$KEYSTORE_FILE" \
               --ks-key-alias "$ANDROID_KEY_ALIAS" \
@@ -255,7 +264,6 @@ jobs:
               --out "$signed" \
               "$aligned"
 
-            echo "Verifying signed APK: $signed"
             "$APKSIGNER" verify --verbose --print-certs "$signed"
           done
 
