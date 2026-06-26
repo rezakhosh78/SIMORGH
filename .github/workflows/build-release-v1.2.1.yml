@@ -39,6 +39,10 @@ jobs:
       XRAY_VERSION: "v26.6.22"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout source
@@ -128,25 +132,39 @@ jobs:
           set -e
           missing=0
 
-          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "Missing secret: ANDROID_KEYSTORE_BASE64"
             missing=1
+          else
+            echo "ANDROID_KEYSTORE_BASE64 is set"
           fi
-          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+
+          if [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
             echo "Missing secret: ANDROID_KEYSTORE_PASSWORD"
             missing=1
+          else
+            echo "ANDROID_KEYSTORE_PASSWORD is set"
           fi
-          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+
+          if [ -z "$ANDROID_KEY_ALIAS" ]; then
             echo "Missing secret: ANDROID_KEY_ALIAS"
             missing=1
+          else
+            echo "ANDROID_KEY_ALIAS is set"
           fi
-          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+
+          if [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "Missing secret: ANDROID_KEY_PASSWORD"
             missing=1
+          else
+            echo "ANDROID_KEY_PASSWORD is set"
           fi
 
           if [ "$missing" -ne 0 ]; then
             echo "Signing secrets are required for signed APK output."
+            echo "Make sure this workflow is running in repository: $GITHUB_REPOSITORY"
+            echo "Repository secrets must be created in: Settings > Secrets and variables > Actions"
+            echo "Do not run signed release from a fork pull_request because GitHub does not pass secrets there."
             exit 1
           fi
 
@@ -155,7 +173,7 @@ jobs:
         run: |
           set -e
           KEYSTORE_FILE="$RUNNER_TEMP/simorgh-release.jks"
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
           chmod 600 "$KEYSTORE_FILE"
           echo "KEYSTORE_FILE=$KEYSTORE_FILE" >> "$GITHUB_ENV"
 
@@ -167,6 +185,8 @@ jobs:
           echo "XRAY_VERSION=$XRAY_VERSION"
           echo "BUILD_DIR=$BUILD_DIR"
           echo "GRADLE_CMD=$GRADLE_CMD"
+          echo "REPOSITORY=$GITHUB_REPOSITORY"
+          echo "EVENT=$GITHUB_EVENT_NAME"
           java -version
           "$GRADLE_CMD" --version
 
@@ -229,9 +249,9 @@ jobs:
             echo "Signing: $signed"
             "$APKSIGNER" sign \
               --ks "$KEYSTORE_FILE" \
-              --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-              --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
               --out "$signed" \
               "$aligned"
 
