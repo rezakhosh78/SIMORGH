@@ -36,6 +36,7 @@ jobs:
 
     env:
       VERSION_NAME: "1.2.1"
+      FINAL_APK_NAME: "SIMORGH-v1.2.1-amd64-v8.apk"
       XRAY_VERSION: "v26.6.22"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
@@ -85,7 +86,6 @@ jobs:
 
           if [ -z "$root" ]; then
             echo "Could not find Gradle project root."
-            echo "Repository tree:"
             find "$GITHUB_WORKSPACE" -maxdepth 4 -type f | sort | sed 's#^# - #'
             exit 1
           fi
@@ -162,12 +162,7 @@ jobs:
           fi
 
           if [ "$missing" -ne 0 ]; then
-            echo "Signing secrets are required for signed APK output."
-            echo "Expected secret names:"
-            echo "SIGNING_KEYSTORE_BASE64"
-            echo "SIGNING_STORE_PASSWORD"
-            echo "SIGNING_KEY_ALIAS"
-            echo "SIGNING_KEY_PASSWORD"
+            echo "Signing secrets are required."
             exit 1
           fi
 
@@ -187,15 +182,14 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           echo "SIMORGH_VERSION=$VERSION_NAME"
+          echo "FINAL_APK_NAME=$FINAL_APK_NAME"
           echo "XRAY_VERSION=$XRAY_VERSION"
           echo "BUILD_DIR=$BUILD_DIR"
           echo "GRADLE_CMD=$GRADLE_CMD"
-          echo "REPOSITORY=$GITHUB_REPOSITORY"
-          echo "EVENT=$GITHUB_EVENT_NAME"
           java -version
           "$GRADLE_CMD" --version
 
-      - name: Build unsigned release APK
+      - name: Build release APK
         shell: bash
         working-directory: ${{ env.BUILD_DIR }}
         run: |
@@ -224,7 +218,7 @@ jobs:
           echo "ZIPALIGN=$ZIPALIGN" >> "$GITHUB_ENV"
           echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
 
-      - name: Sign APK outputs
+      - name: Sign release APK
         shell: bash
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
@@ -234,44 +228,39 @@ jobs:
           set -e
           mkdir -p "$GITHUB_WORKSPACE/signed-release-artifacts"
 
-          mapfile -t unsigned_apks < <(find "$BUILD_DIR" -type f -path "*/build/outputs/apk/release/*.apk" | sort)
-          if [ "${#unsigned_apks[@]}" -eq 0 ]; then
-            echo "No release APK files found under: $BUILD_DIR"
+          release_apk="$(find "$BUILD_DIR" -type f -path "*/build/outputs/apk/release/*.apk" | sort | head -n 1 || true)"
+          if [ -z "$release_apk" ]; then
+            echo "No release APK file found under: $BUILD_DIR"
             find "$BUILD_DIR" -maxdepth 7 -type f | sort | sed 's#^# - #'
             exit 1
           fi
 
-          count=0
-          for apk in "${unsigned_apks[@]}"; do
-            count=$((count + 1))
-            base="$(basename "$apk")"
-            clean_base="${base/-unsigned/}"
-            clean_base="${clean_base// /-}"
-            aligned="$RUNNER_TEMP/aligned-$count-$clean_base"
-            signed="$GITHUB_WORKSPACE/signed-release-artifacts/SIMORGH-v${VERSION_NAME}-$count-signed-$clean_base"
+          aligned="$RUNNER_TEMP/aligned-release.apk"
+          final_apk="$GITHUB_WORKSPACE/signed-release-artifacts/$FINAL_APK_NAME"
 
-            echo "Aligning: $apk"
-            "$ZIPALIGN" -p -f 4 "$apk" "$aligned"
+          echo "Source APK: $release_apk"
+          echo "Final signed APK: $final_apk"
 
-            echo "Signing: $signed"
-            "$APKSIGNER" sign \
-              --ks "$KEYSTORE_FILE" \
-              --ks-key-alias "$SIGNING_KEY_ALIAS" \
-              --ks-pass "pass:$SIGNING_STORE_PASSWORD" \
-              --key-pass "pass:$SIGNING_KEY_PASSWORD" \
-              --out "$signed" \
-              "$aligned"
+          "$ZIPALIGN" -p -f 4 "$release_apk" "$aligned"
 
-            "$APKSIGNER" verify --verbose --print-certs "$signed"
-          done
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE_FILE" \
+            --ks-key-alias "$SIGNING_KEY_ALIAS" \
+            --ks-pass "pass:$SIGNING_STORE_PASSWORD" \
+            --key-pass "pass:$SIGNING_KEY_PASSWORD" \
+            --out "$final_apk" \
+            "$aligned"
 
+          "$APKSIGNER" verify --verbose --print-certs "$final_apk"
+
+          find "$GITHUB_WORKSPACE/signed-release-artifacts" -type f -name "*.apk" -print
           ls -lah "$GITHUB_WORKSPACE/signed-release-artifacts"
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SIMORGH-v1.2.1-signed-release-apk
-          path: signed-release-artifacts/*
+          path: signed-release-artifacts/SIMORGH-v1.2.1-amd64-v8.apk
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -296,54 +285,43 @@ jobs:
             * پشتیبانی از کانفیگ‌های ساده‌ی `VLESS` و `Trojan`.
             * تبدیل خودکار لینک `vless://` و `trojan://` به فایل JSON معتبر Xray.
             * اضافه شدن خودکار بلوک `finalmask.tcp.fragment` به JSON نهایی بدون خراب شدن ساختار JSON.
-            * امکان تغییر مقدارهای Fragment توسط کاربر:
-              * `packets`
-              * `lengths`
-              * `delays`
-              * `maxSplit`
+            * امکان تغییر مقدارهای Fragment توسط کاربر: `packets`, `lengths`, `delays`, `maxSplit`.
             * اضافه شدن فیلد **Address** برای جایگزین کردن IP یا دامنه در JSON نهایی.
-            * نمایش Address نهایی از روی فایل JSON ساخته‌شده.
-            * اضافه شدن Ping واقعی با Xray بر اساس JSON نهایی، نه لینک خام VLESS/Trojan.
-            * اصلاح مشکل Connect که ابتدا وصل، سپس Disconnect و بعد دوباره Connect می‌شد.
-            * امن‌سازی دکمه Connect/Disconnect بخش Fragment برای جلوگیری از کرش.
+            * اضافه شدن Ping واقعی با Xray بر اساس JSON نهایی.
+            * اصلاح مشکل Connect/Disconnect/Connect در Fragment.
+            * امن‌سازی دکمه Connect/Disconnect بخش Fragment.
             
             ### 🌐 بهبودهای MSP
             
             * اصلاح چندین کرش هنگام Connect و Disconnect در MSP.
-            * اصلاح مشکل Disconnect در بخش MSP.
-            * اصلاح Connect بین کانفیگ‌های CF Config.
-            * اصلاح Disconnect بعد از اتصال از CF Config.
-            * اضافه شدن دکمه `Clear IPs` در کارت MSP Route برای پاک‌کردن IP cache.
+            * اصلاح Connect و Disconnect در CF Config.
+            * اضافه شدن دکمه `Clear IPs`.
             
             ### ⚡ Simple Xray
             
             * بهبود پایداری Connect و Disconnect.
-            * اصلاح کرش هنگام Disconnect در حالت ServerLess.
-            * حفظ عملکرد ServerLess بدون تغییر در منطق اصلی.
-            * بهبود مدیریت state هنگام اتصال و قطع اتصال.
+            * اصلاح کرش Disconnect در ServerLess.
+            * حفظ منطق اصلی Balancer و ServerLess.
             
             ### 🟣 NipoVPN
             
-            * اصلاح کرش هنگام Disconnect.
-            * امن‌سازی مسیر Stop سرویس NipoVPN.
-            * جلوگیری از اجرای دوباره‌ی سریع Disconnect با debounce.
+            * اصلاح کرش Disconnect.
+            * امن‌سازی Stop سرویس NipoVPN.
             
             ### 🧠 MasterDNS
             
-            * حفظ ساختار MasterDNS بدون تغییر در منطق اصلی.
-            * بهبودهای ایمنی در lifecycle سرویس‌ها برای جلوگیری از کرش هنگام Stop/Destroy.
+            * حفظ ساختار MasterDNS.
+            * امن‌تر شدن lifecycle سرویس‌ها.
             
             ### 🎨 UI / UX
             
-            * بهبود نمایش وضعیت اتصال در هدر.
-            * تغییر متن‌ها و جای‌گذاری دکمه‌ها در بخش Fragment.
+            * بهبود وضعیت اتصال در هدر.
+            * بهبود نمایش Fragment Ping و Address.
             * ثابت‌تر شدن رفتار دکمه‌های Connect/Disconnect.
-            * اصلاح نمایش Ping و Address در بخش Fragment.
             
             ### 🧰 Build / Core
             
-            * به‌روزرسانی مسیر دانلود Xray به نسخه `v26.6.22`.
-            * فعال شدن refresh پیش‌فرض Xray برای جلوگیری از استفاده از نسخه کش‌شده قدیمی.
+            * ارتقای Xray به `v26.6.22`.
             * بهبود مدیریت native processها هنگام Stop/Start.
             
             ---
@@ -356,61 +334,51 @@ jobs:
             * Updated Xray download target to **Xray-core v26.6.22**.
             * Added support for plain `VLESS` and `Trojan` links.
             * Automatically converts `vless://` and `trojan://` links into valid Xray JSON.
-            * Automatically injects the `finalmask.tcp.fragment` block into the final JSON without breaking JSON parsing.
-            * Fragment parameters are now editable by the user:
-              * `packets`
-              * `lengths`
-              * `delays`
-              * `maxSplit`
-            * Added an **Address** override field to replace the outbound address inside the final JSON.
-            * Added real Xray-based Ping using the final generated JSON.
-            * Fixed Fragment Connect behavior where it could connect, disconnect, then reconnect again.
-            * Hardened Fragment Connect/Disconnect button to prevent crashes.
+            * Automatically injects `finalmask.tcp.fragment` into the final JSON.
+            * Fragment parameters are editable: `packets`, `lengths`, `delays`, `maxSplit`.
+            * Added Address override and real Xray-based Ping.
+            * Fixed Fragment Connect/Disconnect/Connect behavior.
+            * Hardened Fragment Connect/Disconnect button.
             
             ### 🌐 MSP Improvements
             
-            * Fixed multiple MSP Connect/Disconnect crashes.
-            * Improved MSP Disconnect stability.
-            * Fixed crashes when switching between CF Config connections.
-            * Fixed Disconnect after connecting through CF Config.
-            * Added `Clear IPs` button inside the MSP Route card.
+            * Fixed MSP Connect/Disconnect crashes.
+            * Fixed CF Config Connect/Disconnect behavior.
+            * Added `Clear IPs` button.
             
             ### ⚡ Simple Xray
             
             * Improved Connect and Disconnect stability.
-            * Fixed Disconnect crash in ServerLess mode.
-            * Preserved ServerLess core behavior without changing its main logic.
-            * Improved state handling during connect/disconnect.
+            * Fixed ServerLess Disconnect crash.
+            * Preserved Balancer and ServerLess core behavior.
             
             ### 🟣 NipoVPN
             
-            * Fixed NipoVPN Disconnect crash.
+            * Fixed Disconnect crash.
             * Hardened NipoVPN service stop path.
-            * Added duplicate disconnect tap protection.
             
             ### 🧠 MasterDNS
             
-            * Preserved MasterDNS logic and routing behavior.
+            * Preserved MasterDNS behavior.
             * Added safer service lifecycle handling.
             
             ### 🎨 UI / UX
             
-            * Improved connection status display in the header.
-            * Reworked Fragment text, button placement, Ping, and Address display.
+            * Improved connection status display.
+            * Improved Fragment Ping and Address display.
             * Improved Connect/Disconnect button behavior.
             
             ### 🧰 Build / Core
             
-            * Updated Xray download target to `v26.6.22`.
-            * Enabled default Xray refresh.
-            * Improved native process cleanup during Stop/Start.
+            * Updated Xray target to `v26.6.22`.
+            * Improved native process cleanup.
             
             ---
             
             ## ✅ Summary
             
-            This update is focused on Fragment mode, safer VPN lifecycle handling, improved MSP/CF behavior, and better Connect/Disconnect reliability.
+            This update focuses on Fragment mode, safer VPN lifecycle handling, MSP/CF improvements, and better Connect/Disconnect reliability.
           files: |
-            signed-release-artifacts/*
+            signed-release-artifacts/SIMORGH-v1.2.1-amd64-v8.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
