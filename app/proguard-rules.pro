@@ -1,2 +1,0 @@
--keep class com.rkh.vpn.** { *; }
--dontwarn dalvik.system.**
