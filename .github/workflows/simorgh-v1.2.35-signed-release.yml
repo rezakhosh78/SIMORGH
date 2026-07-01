@@ -276,6 +276,7 @@ jobs:
 
             ### 🔄 بروزرسانی کلی
             - نسخه برنامه از نسخه مستندشده در README یعنی **1.2.1** به **1.2.35** ارتقا پیدا کرد.
+            تغییر xray-core به ورژن 26.6.27
 
             ### ⚡ Simple
             - صفحه پیش‌فرض برنامه روی **Simple** تنظیم شد.
@@ -318,6 +319,7 @@ jobs:
 
             ### 🔄 General Update
             - The app version has been upgraded from the README-documented version **1.2.1** to **1.2.35**.
+            - Change Xray-Core to v26.6.27
 
             ### ⚡ Simple
             - The default landing page is now **Simple**.
