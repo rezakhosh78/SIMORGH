@@ -37,7 +37,7 @@ jobs:
     env:
       VERSION_NAME: "1.2.35"
       FINAL_APK_NAME: "SIMORGH-v1.2.35-amd64-v8.apk"
-      XRAY_VERSION: "v26.6.22"
+      XRAY_VERSION: "v26.6.27"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
 
@@ -270,7 +270,7 @@ jobs:
           name: ${{ github.event.inputs.release_name || 'SIMORGH VPN v1.2.35' }}
           prerelease: ${{ github.event.inputs.prerelease || false }}
           body: |
-            # 🚀 تغییرات نسخه 1.2.35 نسبت به نسخه مستندشده در README
+            # 🚀 تغییرات نسخه 1.2.35
 
             ## 🇮🇷 فارسی
 
@@ -312,7 +312,7 @@ jobs:
             - نمایش SOCKS5 و حباب‌های مرتبط اصلاح شد.
 
 
-            # 🚀 Changelog v1.2.35 Compared to the README Version
+            # 🚀 Changelog v1.2.35
 
             ## 🇬🇧 English
 
