@@ -1,0 +1,1 @@
+Gradle downloads the official tun2proxy Android library for this ABI during preBuild.

@@ -1,0 +1,1 @@
+Put the MasterDNS native binary here as libstormdns.so for this ABI.

@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+ <uses-permission android:name="android.permission.INTERNET"/>
+ <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+ <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+ <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+ <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
+ <permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" tools:node="remove"/>
+ <uses-permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" tools:node="remove"/>
+ <application android:name=".RKhVpnApplication" android:allowBackup="true" android:icon="@mipmap/ic_launcher_v1220" android:label="SIMORGH" android:roundIcon="@mipmap/ic_launcher_round_v1220" android:supportsRtl="true" android:theme="@style/Theme.RKhVPN">
+  <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+  <service android:name=".service.SimorghPublicVpnService" android:process=":vpncore" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="false" android:foregroundServiceType="specialUse"><intent-filter><action android:name="android.net.VpnService"/></intent-filter><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="vpn"/></service>
+  <service android:name=".service.RkhVpnService" android:process=":vpncore" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="false" android:foregroundServiceType="specialUse"><intent-filter><action android:name="android.net.VpnService"/></intent-filter><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="vpn"/></service>
+
+  <service android:name=".service.RkhVpnTileService" android:label="SIMORGH" android:icon="@drawable/ic_simorgh_notification" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:exported="true">
+   <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+   <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true"/>
+  </service>
+  <receiver android:name=".widget.RkhVpnWidgetProvider" android:exported="true"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/rkh_vpn_widget_info"/></receiver>
+ </application>
+</manifest>
