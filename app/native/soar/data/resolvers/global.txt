@@ -1,0 +1,10 @@
+# Global public resolvers, tried after country-specific candidates (or when the country is
+# unknown). Often blocked in censored networks, but cheap to try.
+1.1.1.1
+1.0.0.1
+8.8.8.8
+8.8.4.4
+9.9.9.9
+149.112.112.112
+208.67.222.222
+208.67.220.220

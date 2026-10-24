@@ -1,0 +1,171 @@
+{
+  "ClientVersion": "453",
+  "PropagationChannelId": "EE0B7486ACAE75AA",
+  "SponsorId": "07D1ACD69B3AC7A2",
+  "RemoteServerListURLs": [
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL21qcjQtcDIzci1wdXdsL3NlcnZlcl9saXN0X2NvbXByZXNzZWQ=",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": false
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuYmxvZ3NmbWNhbmNlcmNpdGl6ZW4uY29tL3dlYi9tanI0LXAyM3ItcHV3bC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuaGVyYm14ZGlpbmNvcnBvcmF0ZWQuY29tL3dlYi9tanI0LXAyM3ItcHV3bC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cueHlkaWFtb25kZGJleHBlcnQuY29tL3dlYi9tanI0LXAyM3ItcHV3bC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL3l0dG0temVpcy1wampkL3NlcnZlcl9saXN0X2NvbXByZXNzZWQ=",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": false
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cucmFjZWVnZ3V4ZGFzLmNvbS93ZWIveXR0bS16ZWlzLXBqamQvc2VydmVyX2xpc3RfY29tcHJlc3NlZA==",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cud2hlZWxyc3NrbWluc2lkZS5jb20vd2ViL3l0dG0temVpcy1wampkL3NlcnZlcl9saXN0X2NvbXByZXNzZWQ=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuZXVyb3BlYW5wYXJzbG9nb2tpY2suY29tL3dlYi95dHRtLXplaXMtcGpqZC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL2g4NjEtYXp2MC02cDk4L3NlcnZlcl9saXN0X2NvbXByZXNzZWQ=",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuYmxvZ3NmbWNhbmNlcmNpdGl6ZW4uY29tL3dlYi9oODYxLWF6djAtNnA5OC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cucmFjZWVnZ3V4ZGFzLmNvbS93ZWIvaDg2MS1henYwLTZwOTgvc2VydmVyX2xpc3RfY29tcHJlc3NlZA==",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuZXVyb3BlYW5wYXJzbG9nb2tpY2suY29tL3dlYi9oODYxLWF6djAtNnA5OC9zZXJ2ZXJfbGlzdF9jb21wcmVzc2Vk",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    }
+  ],
+  "ObfuscatedServerListRootURLs": [
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL21qcjQtcDIzci1wdXdsL29zbA==",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": false
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuYmxvZ3NmbWNhbmNlcmNpdGl6ZW4uY29tL3dlYi9tanI0LXAyM3ItcHV3bC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuaGVyYm14ZGlpbmNvcnBvcmF0ZWQuY29tL3dlYi9tanI0LXAyM3ItcHV3bC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cueHlkaWFtb25kZGJleHBlcnQuY29tL3dlYi9tanI0LXAyM3ItcHV3bC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL3l0dG0temVpcy1wampkL29zbA==",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": false
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cucmFjZWVnZ3V4ZGFzLmNvbS93ZWIveXR0bS16ZWlzLXBqamQvb3Ns",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cud2hlZWxyc3NrbWluc2lkZS5jb20vd2ViL3l0dG0temVpcy1wampkL29zbA==",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuZXVyb3BlYW5wYXJzbG9nb2tpY2suY29tL3dlYi95dHRtLXplaXMtcGpqZC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXBob24vd2ViL2g4NjEtYXp2MC02cDk4L29zbA==",
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuYmxvZ3NmbWNhbmNlcmNpdGl6ZW4uY29tL3dlYi9oODYxLWF6djAtNnA5OC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cucmFjZWVnZ3V4ZGFzLmNvbS93ZWIvaDg2MS1henYwLTZwOTgvb3Ns",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuZXVyb3BlYW5wYXJzbG9nb2tpY2suY29tL3dlYi9oODYxLWF6djAtNnA5OC9vc2w=",
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    }
+  ],
+  "RemoteServerListSignaturePublicKey": "MIICIDANBgkqhkiG9w0BAQEFAAOCAg0AMIICCAKCAgEAt7Ls+/39r+T6zNW7GiVpJfzq/xvL9SBH5rIFnk0RXYEYavax3WS6HOD35eTAqn8AniOwiH+DOkvgSKF2caqk/y1dfq47Pdymtwzp9ikpB1C5OfAysXzBiwVJlCdajBKvBZDerV1cMvRzCKvKwRmvDmHgphQQ7WfXIGbRbmmk6opMBh3roE42KcotLFtqp0RRwLtcBRNtCdsrVsjiI1Lqz/lH+T61sGjSjQ3CHMuZYSQJZo/KrvzgQXpkaCTdbObxHqb6/+i1qaVOfEsvjoiyzTxJADvSytVtcTjijhPEV6XskJVHE1Zgl+7rATr/pDQkw6DPCNBS1+Y6fy7GstZALQXwEDN/qhQI9kWkHijT8ns+i1vGg00Mk/6J75arLhqcodWsdeG/M/moWgqQAnlZAGVtJI1OgeF5fsPpXu4kctOfuZlGjVZXQNW34aOzm8r8S0eVZitPlbhcPiR4gT/aSMz/wd8lZlzZYsje/Jr8u/YtlwjjreZrGRmG8KMOzukV3lLmMppXFMvl4bxv6YFEmIuTsOhbLTwFgh7KYNjodLj/LsqRVfwz31PgWQFTEPICV7GCvgVlPRxnofqKSjgTWI4mxDhBpVcATvaoBl1L/6WLbFvBsoAUBItWwctO2xalKxF5szhGm8lccoc5MZr8kfE0uxMgsxz4er68iCID+rsCAQM=",
+  "ServerEntrySignaturePublicKey": "sHuUVTWaRyh5pZwy4UguSgkwmBe0EHtJJkoF5WrxmvA=",
+  "ExchangeObfuscationKey": "DpXzloJk1Hw6aSzmKKky0xcahsEHubch81Mi6K0XMlU=",
+  "EmitDiagnosticNotices": true,
+  "EmitDiagnosticNetworkParameters": true,
+  "FeedbackUploadURLs": [
+    {
+      "URL": "aHR0cHM6Ly9zMy5hbWF6b25hd3MuY29tL3BzaXVwbG9hZC8=",
+      "RequestHeaders": {
+        "x-amz-acl": " bucket-owner-full-control"
+      },
+      "OnlyAfterAttempts": 0,
+      "SkipVerify": false
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cucmViZWxzeXN0ZW1ydW5uZXJjb21lZHkuY29tLmdsb2JhbC5wcm9kLmZhc3RseS5uZXQv",
+      "RequestHeaders": {
+        "x-amz-acl": " bucket-owner-full-control"
+      },
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cub2ZmaWNlcmFkaW9hZXJvZXZvbHV0aW9uLmNvbS5nbG9iYWwucHJvZC5mYXN0bHkubmV0Lw==",
+      "RequestHeaders": {
+        "x-amz-acl": " bucket-owner-full-control"
+      },
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    },
+    {
+      "URL": "aHR0cHM6Ly93d3cuc2FmYXJpZ29sZnJlYWxlc3RhdGVtb25zdGVyLmNvbS5nbG9iYWwucHJvZC5mYXN0bHkubmV0Lw==",
+      "RequestHeaders": {
+        "x-amz-acl": " bucket-owner-full-control"
+      },
+      "OnlyAfterAttempts": 2,
+      "SkipVerify": true
+    }
+  ],
+  "FeedbackEncryptionPublicKey": "MIICIDANBgkqhkiG9w0BAQEFAAOCAg0AMIICCAKCAgEAxltZsddAqX0qE4dK+X7QfcPfoGbvs6DAxkwY5Cb7mcWW9YpNesOdb+aq0kmDEeUDnMYIVEnUnNLFSOpF/CvjvZ1WQpxYy2sE/ulQUXO9XCtoucM4jaZIKza9TPNUsWaiiMC86UOO6kjZLRodosXwgdykfbn0GGOy90urkMTygSi1JmnUjDqHXNr8mgVS/9qTMX68N598CjzU3zeBJi5Rh2wChRzMDw7y0umJ/xJ7vevJOmEp5qGg4J4x5hMAagG1AF4SDgXwVdSKcwcRoeUUxmmWRgyirPJdEgyLCFNX0Z1LhWmB+Kz8aq7+d+5eEIoIxjmRu4O9AfB/ngvNwapIBSDj/STPszsluH2lIGY9nDBVxKZqQ8oGjDQMoFedzRu2z2dkVYqCoN7Lfve3JTku1MxsIylh67+9emW9d1F+I5v+LWicBrusmRStSB7z4CUuqZEa8GYKNGM0A1Axkdz9y/Dv+4NB6cEw01szEXl/9hJxKh8MStLCFZ1eNaokrcbxnPGHDdZSqGmV3x8eRy1GvQv0xRnoRpyaqdmQvjb7XupiTD+5GT+7PjAwXTN4kJtm39DyIEwKmmXWcFQtn6JWefwRbcXwKKDjj99QssyYQp+7EPiv/QwUAMnHTN2CrWYXEhbBHBkdgxkioPJ47j8nXxydXPBKXcnCruQ4ICEmrsECAQM=",
+  "EnableFeedbackUpload": true,
+  "AdditionalParameters": ""
+}
