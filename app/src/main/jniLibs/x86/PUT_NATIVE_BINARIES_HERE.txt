@@ -1,5 +1,0 @@
-Put executable binaries here, renamed as native libraries:
-- libxray.so
-- libtun2socks.so
-
-Use download_native_binaries_windows.bat from project root to download and place them automatically.
