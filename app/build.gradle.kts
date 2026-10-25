@@ -11,8 +11,10 @@ plugins {
 
 // SIMORGH VPN: Public/Private mode, stable native binaries, liquid glass cards.
 // Native downloader is restricted to official GitHub release URLs only.
-// Optional SHA-256 verification can be enabled with Gradle properties:
-//   -Psimorgh.xrayArm64ZipSha256=<expected xray zip sha256>
+// The default Xray v26.10.21 ARM64 archive is verified against its official SHA-256.
+// Gradle properties can select another Xray release and provide its checksum:
+//   -Psimorgh.xrayVersion=<Xray release tag; default v26.10.21>
+//   -Psimorgh.xrayArm64ZipSha256=<expected xray zip sha256; optional override>
 //   -Psimorgh.stormDnsTermuxArm64ZipSha256=<expected StormDNS Termux ARM64 zip sha256>
 //   -Psimorgh.tun2proxyAndroidLibsZipSha256=<expected tun2proxy android libs zip sha256; optional; default uses v0.7.20 because it exports the Android fd-run ABI>
 //   -Psimorgh.refreshStormDns=true|false  (default: true)
@@ -103,6 +105,12 @@ dependencies {
 val arm64NativeDir = layout.projectDirectory.dir("src/main/jniLibs/arm64-v8a")
 val nativeTmpDir = layout.projectDirectory.dir("build/native-download-tmp")
 val xrayAssetDir = layout.projectDirectory.dir("src/main/assets/xray")
+val configuredXrayVersion = providers.gradleProperty("simorgh.xrayVersion").orNull
+    ?.trim()
+    ?.removePrefix("v")
+val xrayVersion = configuredXrayVersion
+    ?.takeIf { it.matches(Regex("""\d+(?:\.\d+)+""")) }
+    ?: "26.10.21"
 val stormDnsAssetDir = layout.projectDirectory.dir("src/main/assets/stormdns")
 
 fun previewDownloadedFile(file: File): String {
@@ -373,7 +381,12 @@ tasks.register("ensureArm64NativeBinaries") {
         val outDir = arm64NativeDir.asFile
         outDir.mkdirs()
         val expectedXrayZipSha256 = providers.gradleProperty("simorgh.xrayArm64ZipSha256").orNull
-                val expectedStormDnsZipSha256 = providers.gradleProperty("simorgh.stormDnsTermuxArm64ZipSha256").orNull
+            ?: if (xrayVersion == "26.10.21") {
+                "d81604f35a56c98ea6091142c1c744f4895c7384bc2e1c85cd910612c70794e9"
+            } else {
+                null
+            }
+        val expectedStormDnsZipSha256 = providers.gradleProperty("simorgh.stormDnsTermuxArm64ZipSha256").orNull
         val expectedTun2proxyZipSha256 = providers.gradleProperty("simorgh.tun2proxyAndroidLibsZipSha256").orNull
         val refreshXray = providers.gradleProperty("simorgh.refreshXray").orNull?.toBooleanStrictOrNull() ?: true
         val refreshStormDns = providers.gradleProperty("simorgh.refreshStormDns").orNull?.toBooleanStrictOrNull() ?: true
@@ -382,7 +395,7 @@ tasks.register("ensureArm64NativeBinaries") {
         val libStormDns = File(outDir, "libstormdns.so")
         val libTun2proxyArm64 = File(outDir, "libtun2proxy.so")
 
-        val xrayZip = nativeTmpDir.file("xray-arm64-v8a-v26.6.27.zip").asFile
+        val xrayZip = nativeTmpDir.file("xray-arm64-v8a-v$xrayVersion.zip").asFile
         val geositeDat = xrayAssetDir.file("geosite.dat").asFile
         val geoipDat = xrayAssetDir.file("geoip.dat").asFile
         val needsXrayZip =
@@ -394,7 +407,7 @@ tasks.register("ensureArm64NativeBinaries") {
         if (needsXrayZip) {
             downloadWithFallback(
                 listOf(
-                    "https://github.com/XTLS/Xray-core/releases/download/v26.6.27/Xray-android-arm64-v8a.zip"
+                    "https://github.com/XTLS/Xray-core/releases/download/v$xrayVersion/Xray-android-arm64-v8a.zip"
                 ),
                 xrayZip,
                 "xray/arm64-v8a + geo assets"
