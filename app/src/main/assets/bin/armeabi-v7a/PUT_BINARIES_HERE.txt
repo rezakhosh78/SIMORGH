@@ -1,4 +1,0 @@
-Place executable native files here for ABI: armeabi-v7a
-Required names:
-- xray
-- tun2socks

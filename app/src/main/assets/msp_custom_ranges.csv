@@ -1,9 +1,0 @@
-# User-provided MSP ranges. ISP label comes from the uploaded filename.
-network,country,country_code,continent,continent_code,asn,as_name,as_domain,type
-91.216.13.0/24,,,,,,"ArvanCloud Global TR",,hosting
-130.185.120.0/22,,,,,,"ArvanCloud Global TR",,hosting
-185.204.168.0/22,,,,,,"ArvanCloud Global TR",,hosting
-185.235.40.0/22,,,,,,"ArvanCloud Global TR",,hosting
-193.24.119.0/24,,,,,,"ArvanCloud Global TR",,hosting
-194.5.192.0/23,,,,,,"ArvanCloud Global TR",,hosting
-194.5.206.0/23,,,,,,"ArvanCloud Global TR",,hosting
