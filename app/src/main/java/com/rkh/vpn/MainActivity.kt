@@ -19,7 +19,6 @@ import kotlinx.coroutines.delay
 import com.rkh.vpn.service.RkhVpnService
 import com.rkh.vpn.service.RavanVpnService
 import com.rkh.vpn.service.SimorghPublicVpnService
-import com.rkh.callisto.service.CallistoVpnService
 import com.rkh.vpn.data.RKhVpnLogStore
 import com.rkh.vpn.ui.RKhVpnApp
 import com.rkh.vpn.ui.RKhVpnViewModel
@@ -33,7 +32,7 @@ class MainActivity : ComponentActivity() {
     private val vm: RKhVpnViewModel by viewModels { RKhVpnViewModel.Factory(application) }
     private val publicVm: SimorghPublicViewModel by viewModels { SimorghPublicViewModel.Factory(application) }
 
-    private enum class PendingVpnMode { PUBLIC, PRIVATE, CF, SIMPLE, SIMPLE_NEXT, SIMPLE_CONFIG, FRAGMENT, NIPO, STORMDNS, RAVAN, CALLISTO, DESYNC }
+    private enum class PendingVpnMode { PUBLIC, PRIVATE, CF, SIMPLE, SIMPLE_NEXT, SIMPLE_CONFIG, FRAGMENT, NIPO, STORMDNS, RAVAN, DESYNC }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,15 +81,11 @@ class MainActivity : ComponentActivity() {
 
             fun stopIndependentTransports(
                 reason: String,
-                stopRavan: Boolean = true,
-                stopCallisto: Boolean = true
+                stopRavan: Boolean = true
             ) {
                 RKhVpnLogStore.append(this, "IndependentUI", "Stopping independent transports before $reason")
                 if (stopRavan) {
                     safeStopService(Intent(this, RavanVpnService::class.java).setAction(RavanVpnService.ACTION_STOP))
-                }
-                if (stopCallisto) {
-                    safeStopService(Intent(this, CallistoVpnService::class.java).setAction(CallistoVpnService.ACTION_STOP))
                 }
             }
 
@@ -101,18 +96,6 @@ class MainActivity : ComponentActivity() {
                     .setAction(RavanVpnService.ACTION_START)
                     .putExtra(RavanVpnService.EXTRA_TRANSPORT, page)
                     .putExtra(RavanVpnService.EXTRA_NESTED, page == "warp_in_warp")
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
-            }
-            fun launchCallisto(psiphon: Boolean) {
-                stopIndependentTransports("Callisto/${if (psiphon) "psiphon" else "tor"}", stopCallisto = false)
-                RKhVpnLogStore.append(this, "IndependentUI", "Launching Callisto mode=${if (psiphon) "psiphon" else "tor"}")
-                val exitCountry = getSharedPreferences("callisto_preferences", MODE_PRIVATE)
-                    .getString(CallistoVpnService.EXTRA_EXIT_COUNTRY, "BEST")
-                    .orEmpty()
-                    .ifBlank { "BEST" }
-                val intent = Intent(this, CallistoVpnService::class.java)
-                    .putExtra(CallistoVpnService.EXTRA_PSIPHON_ENABLED, psiphon)
-                    .putExtra(CallistoVpnService.EXTRA_EXIT_COUNTRY, exitCountry)
                 if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             }
             fun launchDesync() {
@@ -204,7 +187,6 @@ class MainActivity : ComponentActivity() {
                     PendingVpnMode.RAVAN -> launchRavan(target?.takeIf {
                         it in setOf("warp", "warp_wireguard", "warp_awg", "warp_plus", "warp_in_warp", "soardns", "dnstt")
                     } ?: "warp_plus")
-                    PendingVpnMode.CALLISTO -> launchCallisto(target == "psiphon")
                     PendingVpnMode.DESYNC -> {
                         stopIndependentTransports("Desync")
                         safeStopService(Intent(this, SimorghPublicVpnService::class.java).setAction(SimorghPublicVpnService.ACTION_STOP))
@@ -461,8 +443,6 @@ class MainActivity : ComponentActivity() {
                 onPublicStop = { publicVm.disconnect() },
                 onRavanStart = { page -> requestVpn(PendingVpnMode.RAVAN, page) },
                 onRavanStop = { startService(Intent(this, RavanVpnService::class.java).setAction(RavanVpnService.ACTION_STOP)) },
-                onCallistoStart = { psiphon -> requestVpn(PendingVpnMode.CALLISTO, if (psiphon) "psiphon" else "tor") },
-                onCallistoStop = { startService(Intent(this, CallistoVpnService::class.java).setAction(CallistoVpnService.ACTION_STOP)) },
                 onDesyncStart = { raw, profile, custom ->
                     getSharedPreferences("desync_preferences", MODE_PRIVATE).edit()
                         .putString("raw_config", raw).putString("profile", profile).putString("custom_args", custom).apply()

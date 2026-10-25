@@ -6,7 +6,6 @@ enum class RavanTransport {
     WARP,
     WIREGUARD,
     MASQUE,
-    TOR,
     NESTED_WARP,
     DIRECT
 }

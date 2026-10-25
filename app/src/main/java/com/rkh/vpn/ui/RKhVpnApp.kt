@@ -131,8 +131,6 @@ fun RKhVpnApp(
     onStormDnsImportResolvers: () -> Unit,
     onRavanStart: (String) -> Unit = {},
     onRavanStop: () -> Unit = {},
-    onCallistoStart: (Boolean) -> Unit = {},
-    onCallistoStop: () -> Unit = {},
     onDesyncStart: (String, String, String) -> Unit = { _, _, _ -> },
     onDesyncStop: () -> Unit = {}
 ) {
@@ -233,8 +231,6 @@ fun RKhVpnApp(
                     onTunnelAppsCleared = { section, mode -> publicVm.clearTunnelAppPackages(section, mode) },
                     onRavanStart = onRavanStart,
                     onRavanStop = onRavanStop,
-                    onCallistoStart = onCallistoStart,
-                    onCallistoStop = onCallistoStop,
                     onDesyncStart = onDesyncStart,
                     onDesyncStop = onDesyncStop,
                     modifier = Modifier.fillMaxSize()

@@ -137,9 +137,6 @@ class RavanCore(
             if (hop.transport == RavanTransport.MASQUE || hop.transport == RavanTransport.WARP) {
                 require(hop.endpoint.secure) { "${hop.name}: secure endpoint is required" }
             }
-            if (hop.transport == RavanTransport.TOR) {
-                require(hop.endpoint.port != 53) { "${hop.name}: DNS port cannot be used as a Tor endpoint" }
-            }
         }
         val nestedCount = route.hops.count { it.transport == RavanTransport.NESTED_WARP }
         require(nestedCount <= 1) { "only one nested WARP coordinator is allowed per route" }
