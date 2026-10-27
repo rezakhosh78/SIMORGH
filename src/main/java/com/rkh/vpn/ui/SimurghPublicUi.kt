@@ -252,8 +252,6 @@ fun SimorghPublicHome(
     onTunnelAppsCleared: (String, String) -> Unit,
     onRavanStart: (String) -> Unit = {},
     onRavanStop: () -> Unit = {},
-    onCallistoStart: (Boolean) -> Unit = {},
-    onCallistoStop: () -> Unit = {},
     onDesyncStart: (String, String, String) -> Unit = { _, _, _ -> },
     onDesyncStop: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -336,7 +334,7 @@ fun SimorghPublicHome(
         }
     }
     val uiPrefs = remember(context) { context.applicationContext.getSharedPreferences("simorgh_public_state", android.content.Context.MODE_PRIVATE or android.content.Context.MODE_MULTI_PROCESS) }
-    val validMainPages = remember { setOf("home", "advance", "simple", "serverless", "fragment", "nipo", "stormdns", "tor", "psiphon", "desync") }
+    val validMainPages = remember { setOf("home", "advance", "simple", "serverless", "fragment", "nipo", "stormdns", "desync") }
     val pageHistory = remember { mutableStateListOf<String>() }
     val storedPage = uiPrefs.getString("lastMainPage", "home").orEmpty()
     var mainPage by remember {
@@ -513,14 +511,6 @@ fun SimorghPublicHome(
                                 onRefreshLogs = onStormDnsRefreshLogs,
                                 onClearLogs = onStormDnsClearLogs
                             ) }
-                            item { TelegramFooter() }
-                        }
-                        "tor" -> {
-                            item { CallistoTransportCard(title = "Tor", psiphon = false, onStart = onCallistoStart, onStop = onCallistoStop) }
-                            item { TelegramFooter() }
-                        }
-                        "psiphon" -> {
-                            item { CallistoTransportCard(title = "Psiphon", psiphon = true, onStart = onCallistoStart, onStop = onCallistoStop) }
                             item { TelegramFooter() }
                         }
                         "desync" -> {
@@ -2953,8 +2943,6 @@ private fun PublicHeader(
                             state.stormDnsConnecting -> "MasterDNS Connecting"
                             else -> "MasterDNS Disconnected"
                         }
-                        "tor" -> "Tor"
-                        "psiphon" -> "Psiphon"
                         "desync" -> "Desync"
                         else -> when {
                             state.connected -> "MSP Connected"

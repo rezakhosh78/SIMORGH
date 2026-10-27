@@ -68,9 +68,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import kotlinx.coroutines.delay
-import com.rkh.callisto.log.DebugLog
-import com.rkh.callisto.model.ConnectionStateStore
-import com.rkh.callisto.service.CallistoVpnService
 import com.rkh.vpn.R
 import com.rkh.vpn.data.RKhVpnLogStore
 
@@ -169,26 +166,8 @@ internal fun simorghAdaptiveButtonColors() = ButtonDefaults.buttonColors(
 
 internal fun sectionAccentForPage(key: String): Color = when (key) {
     "home" -> Color(0xFF2D9CDB)
-    "tor" -> Color(0xFFF59E0B)
-    "psiphon" -> Color(0xFFF05A28)
     else -> launcherEntries.firstOrNull { it.key == key }?.color ?: Color(0xFF2D9CDB)
 }
-
-private val CALLISTO_EXIT_COUNTRIES = listOf(
-    "BEST" to "Best available",
-    "US" to "United States",
-    "CA" to "Canada",
-    "GB" to "United Kingdom",
-    "DE" to "Germany",
-    "NL" to "Netherlands",
-    "FR" to "France",
-    "SE" to "Sweden",
-    "FI" to "Finland",
-    "TR" to "Turkey",
-    "JP" to "Japan",
-    "SG" to "Singapore",
-    "AU" to "Australia"
-)
 
 private data class DesyncCustomFields(
     val proto: String = "", val auto: String = "", val cacheTtl: String = "", val hosts: String = "",
@@ -488,7 +467,7 @@ fun IndependentTransportCard(page: String, onStart: (String) -> Unit, onStop: ()
         "warp_wireguard" -> "WARP WireGuard"
         "warp_awg" -> "WARP AWG"
         "warp_in_warp" -> "WARP-in-WARP"
-        else -> "Tor"
+        else -> "WARP"
     }
     val description = when (page) {
         "warp", "warp_plus" -> "Cloudflare WARP Plus through SIMORGH's independent tunnel."
@@ -674,132 +653,6 @@ fun DnsTunnelTransportCard(page: String, onStart: (String) -> Unit, onStop: () -
             Text("Tunnel path: Android VPN → SIMORGH tun2proxy → local ${if (soar) "SoarDNS" else "DNSTT"} SOCKS5", color = Color.White.copy(alpha = .54f), fontSize = 11.sp, fontFamily = FontFamily.SansSerif, textAlign = TextAlign.Center)
         }
     }
-}
-
-@Composable
-fun CallistoTransportCard(title: String, psiphon: Boolean, onStart: (Boolean) -> Unit, onStop: () -> Unit) {
-    val context = LocalContext.current
-    val prefs = remember(context) { context.getSharedPreferences("callisto_preferences", android.content.Context.MODE_PRIVATE) }
-    var status by remember { mutableStateOf(ConnectionStateStore.get(context).status) }
-    var detail by remember { mutableStateOf(ConnectionStateStore.get(context).detail) }
-    var showDiagnostics by remember { mutableStateOf(false) }
-    var exitCountry by remember { mutableStateOf(prefs.getString(CallistoVpnService.EXTRA_EXIT_COUNTRY, "BEST").orEmpty()) }
-    var countryMenuExpanded by remember { mutableStateOf(false) }
-    var logs by remember { mutableStateOf("") }
-    LaunchedEffect(psiphon) {
-        DebugLog.initialize(context)
-        while (true) {
-            val snapshot = ConnectionStateStore.refresh(context)
-            status = snapshot.status
-            detail = snapshot.detail
-            logs = DebugLog.asDisplayText("ALL") + "\n" + RKhVpnLogStore.readText(context)
-            delay(600L)
-        }
-    }
-    val active = status != ConnectionStateStore.Status.DISCONNECTED && status != ConnectionStateStore.Status.ERROR
-    val connected = status == ConnectionStateStore.Status.CONNECTED
-    val theme = independentTheme(if (psiphon) "psiphon" else "tor")
-    val accent = theme.accent
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = theme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, simorghOutline(LocalAppIsDarkTheme.current))
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-                .background(theme.surface)
-                .padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(title, color = accent, fontSize = 27.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.SansSerif)
-            Text(
-                if (psiphon) "Psiphon route through the Callisto transport stack." else "Tor route through the Callisto transport stack.",
-                color = Color.White.copy(alpha = .70f), fontSize = 13.sp,
-                fontFamily = FontFamily.SansSerif, textAlign = TextAlign.Center
-            )
-            IndependentConnectOrb(
-                active = active,
-                connected = connected,
-                color = accent,
-                onClick = { if (active) onStop() else onStart(psiphon) }
-            )
-            Text(detail.take(180).ifBlank { "Callisto route is ready." }, color = Color.White.copy(alpha = .70f), fontSize = 12.sp, fontFamily = FontFamily.SansSerif, textAlign = TextAlign.Center)
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { showDiagnostics = !showDiagnostics },
-                shape = RoundedCornerShape(999.dp),
-                colors = simorghAdaptiveButtonColors(),
-                border = androidx.compose.foundation.BorderStroke(1.dp, simorghOutline(LocalAppIsDarkTheme.current))
-            ) { Text(if (showDiagnostics) "HIDE SETTINGS & LOGS" else "SETTINGS & LOGS", fontFamily = FontFamily.SansSerif, fontSize = 11.sp) }
-            if (showDiagnostics) {
-                Box {
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { countryMenuExpanded = true },
-                        shape = RoundedCornerShape(999.dp),
-                        colors = simorghAdaptiveButtonColors(),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, simorghOutline(LocalAppIsDarkTheme.current))
-                    ) {
-                        val selectedName = CALLISTO_EXIT_COUNTRIES.firstOrNull { it.first == exitCountry }?.second ?: "Custom: $exitCountry"
-                        Text("Exit country: $selectedName", fontFamily = FontFamily.SansSerif, fontSize = 11.sp, maxLines = 1)
-                    }
-                    DropdownMenu(expanded = countryMenuExpanded, onDismissRequest = { countryMenuExpanded = false }) {
-                        CALLISTO_EXIT_COUNTRIES.forEach { (code, name) ->
-                            DropdownMenuItem(
-                                text = { Text("$name ($code)", fontFamily = FontFamily.SansSerif) },
-                                onClick = {
-                                    exitCountry = code
-                                    prefs.edit().putString(CallistoVpnService.EXTRA_EXIT_COUNTRY, code).apply()
-                                    countryMenuExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        val country = exitCountry.trim().uppercase().ifBlank { "BEST" }
-                        exitCountry = country
-                        prefs.edit().putString(CallistoVpnService.EXTRA_EXIT_COUNTRY, country).apply()
-                        DebugLog.add("UI", "Callisto settings saved")
-                        logs = DebugLog.asDisplayText("ALL") + "\n" + RKhVpnLogStore.readText(context)
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                    colors = simorghAdaptiveButtonColors(),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, simorghOutline(LocalAppIsDarkTheme.current))
-                ) { Text("SAVE SETTINGS", fontFamily = FontFamily.SansSerif, fontSize = 11.sp) }
-                Text("Logs", color = Color.White.copy(alpha = .86f), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
-                CopyableLogBlock(
-                    logs = logs,
-                    onClear = { DebugLog.clear(); RKhVpnLogStore.clear(context); logs = "" },
-                    emptyText = "No logs yet. Tap CONNECT to collect diagnostics."
-                )
-            }
-            Text("This page is independent from MSP, Free V2Ray, Fragment, NipoVPN and MasterDNS.", color = Color.White.copy(alpha = .54f), fontSize = 11.sp, fontFamily = FontFamily.SansSerif, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun DesyncArgumentField(command: String, hint: String, value: String, accent: Color, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth(), singleLine = true,
-        label = { Text(command, color = accent, fontFamily = FontFamily.SansSerif) },
-        placeholder = { Text(hint, color = Color.White.copy(alpha = .42f), fontFamily = FontFamily.SansSerif) },
-        supportingText = { Text(hint, color = Color.White.copy(alpha = .48f), fontSize = 10.sp, fontFamily = FontFamily.SansSerif) },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-            focusedLabelColor = accent,
-            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            focusedBorderColor = accent,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = .55f),
-            cursorColor = accent
-        )
-    )
 }
 
 @Composable
