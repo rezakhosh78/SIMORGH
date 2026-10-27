@@ -1,0 +1,1 @@
+Run download_native_binaries_windows.bat. This folder needs libxray.so and libtun2socks.so for x86_64.

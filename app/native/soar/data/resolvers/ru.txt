@@ -1,0 +1,3 @@
+# Major domestic public resolvers in Russia (Yandex DNS). Hand-curated, well-known services.
+77.88.8.8
+77.88.8.1

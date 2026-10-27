@@ -1,0 +1,8 @@
+# Major domestic public resolvers in China. Hand-curated, well-known services; domestic resolvers
+# usually keep forwarding when foreign ones are blocked.
+223.5.5.5
+223.6.6.6
+119.29.29.29
+180.76.76.76
+114.114.114.114
+114.114.115.115
