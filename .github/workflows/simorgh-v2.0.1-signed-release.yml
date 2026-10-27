@@ -1,4 +1,4 @@
-name: SIMORGH Android Signed Release v2.0.0
+name: SIMORGH Android Signed Release v2.0.1
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
       tag_name:
         description: "Release tag"
         required: true
-        default: "v2.0.0"
+        default: "v2.0.1"
       release_name:
         description: "GitHub Release title"
         required: true
-        default: "SIMORGH VPN v2.0.0"
+        default: "SIMORGH VPN v2.0.1"
       prerelease:
         description: "Mark as pre-release"
         required: true
@@ -23,8 +23,8 @@ on:
 
   push:
     tags:
-      - "v2.0.0"
-      - "v2.0.0-*"
+      - "v2.0.1"
+      - "v2.0.1-*"
 
 permissions:
   contents: write
@@ -35,8 +35,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      VERSION_NAME: "v2.0.0"
-      FINAL_APK_NAME: "SIMORGH-v2.0.0-arm64-v8a.apk"
+      VERSION_NAME: "v2.0.1"
+      FINAL_APK_NAME: "SIMORGH-v2.0.1-arm64-v8a.apk"
       XRAY_VERSION: "v26.10.21"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
@@ -278,22 +278,22 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SIMORGH-v2.0.0-signed-release-apk
-          path: signed-release-artifacts/SIMORGH-v2.0.0-arm64-v8a.apk
+          name: SIMORGH-v2.0.1-signed-release-apk
+          path: signed-release-artifacts/SIMORGH-v2.0.1-arm64-v8a.apk
           if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          name: ${{ github.event.inputs.release_name || 'SIMORGH VPN v2.0.0' }}
+          name: ${{ github.event.inputs.release_name || 'SIMORGH VPN v2.0.1' }}
           prerelease: ${{ github.event.inputs.prerelease || false }}
           body: |
-            # 🚀 SIMORGH VPN v2.0.0
+            # 🚀 SIMORGH VPN v2.0.1
 
             ## 🇮🇷 فارسی
 
-            - نسخهٔ برنامه به **v2.0.0** ارتقا پیدا کرد.
+            - نسخهٔ برنامه به **v2.0.1** ارتقا پیدا کرد.
             - Xray-core به نسخهٔ **26.10.21** به‌روزرسانی شد.
             - تم برنامه فقط حالت شب را دارد و رنگ متن‌ها و دکمه‌ها در کارت‌ها هماهنگ‌تر شده است.
             - پس‌زمینهٔ صفحهٔ اصلی و هدر ساده‌تر و مدرن‌تر شد.
@@ -302,13 +302,13 @@ jobs:
 
             ## 🇬🇧 English
 
-            - The app is now at version **v2.0.0**.
+            - The app is now at version **v2.0.1**.
             - Updated Xray-core to **v26.10.21**.
             - The app uses a dark-only theme with consistent text and button contrast across cards.
             - Simplified and modernized the home and header backgrounds.
             - ServerLess configs are selected from the list and connected with the main CONNECT button.
             - Moved **Update Subscription** below CONNECT.
           files: |
-            signed-release-artifacts/SIMORGH-v2.0.0-arm64-v8a.apk
+            signed-release-artifacts/SIMORGH-v2.0.1-arm64-v8a.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
