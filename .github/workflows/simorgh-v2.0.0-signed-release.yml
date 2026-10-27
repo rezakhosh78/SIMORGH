@@ -37,7 +37,7 @@ jobs:
     env:
       VERSION_NAME: "v2.0.0"
       FINAL_APK_NAME: "SIMORGH-v2.0.0-arm64-v8a.apk"
-      XRAY_VERSION: "v26.6.27"
+      XRAY_VERSION: "v26.10.21"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvm.options=-Xmx2g"
       SIMORGH_REFRESH_XRAY: "true"
 
@@ -216,10 +216,10 @@ jobs:
 
           if [ -f "$BUILD_DIR/app/build.gradle" ] || [ -f "$BUILD_DIR/app/build.gradle.kts" ]; then
             echo "Detected :app module. Building :app:assembleRelease"
-            "$GRADLE_CMD" clean :app:assembleRelease "-Psimorgh.refreshXray=$SIMORGH_REFRESH_XRAY" --stacktrace
+            "$GRADLE_CMD" clean :app:assembleRelease "-Psimorgh.xrayVersion=$XRAY_VERSION" "-Psimorgh.refreshXray=$SIMORGH_REFRESH_XRAY" --stacktrace
           else
             echo "No :app module detected. Building root assembleRelease"
-            "$GRADLE_CMD" clean assembleRelease "-Psimorgh.refreshXray=$SIMORGH_REFRESH_XRAY" --stacktrace
+            "$GRADLE_CMD" clean assembleRelease "-Psimorgh.xrayVersion=$XRAY_VERSION" "-Psimorgh.refreshXray=$SIMORGH_REFRESH_XRAY" --stacktrace
           fi
 
       - name: Locate Android build tools
@@ -294,7 +294,7 @@ jobs:
             ## 🇮🇷 فارسی
 
             - نسخهٔ برنامه به **v2.0.0** ارتقا پیدا کرد.
-            - Xray-core به نسخهٔ **26.6.27** به‌روزرسانی شد.
+            - Xray-core به نسخهٔ **26.10.21** به‌روزرسانی شد.
             - تم برنامه فقط حالت شب را دارد و رنگ متن‌ها و دکمه‌ها در کارت‌ها هماهنگ‌تر شده است.
             - پس‌زمینهٔ صفحهٔ اصلی و هدر ساده‌تر و مدرن‌تر شد.
             - در ServerLess، کانفیگ از فهرست انتخاب می‌شود و اتصال با دکمهٔ اصلی CONNECT انجام می‌شود.
@@ -303,7 +303,7 @@ jobs:
             ## 🇬🇧 English
 
             - The app is now at version **v2.0.0**.
-            - Updated Xray-core to **v26.6.27**.
+            - Updated Xray-core to **v26.10.21**.
             - The app uses a dark-only theme with consistent text and button contrast across cards.
             - Simplified and modernized the home and header backgrounds.
             - ServerLess configs are selected from the list and connected with the main CONNECT button.
