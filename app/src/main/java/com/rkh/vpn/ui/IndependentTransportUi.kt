@@ -656,6 +656,25 @@ fun DnsTunnelTransportCard(page: String, onStart: (String) -> Unit, onStop: () -
 }
 
 @Composable
+private fun DesyncArgumentField(command: String, hint: String, value: String, accent: Color, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth(), singleLine = true,
+        label = { Text(command, color = accent, fontFamily = FontFamily.SansSerif) },
+        placeholder = { Text(hint, color = Color.White.copy(alpha = .42f), fontFamily = FontFamily.SansSerif) },
+        supportingText = { Text(hint, color = Color.White.copy(alpha = .48f), fontSize = 10.sp, fontFamily = FontFamily.SansSerif) },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedLabelColor = accent,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedBorderColor = accent,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = .55f),
+            cursorColor = accent
+        )
+    )
+}
+
+@Composable
 fun DesyncTransportCard(onStart: (String, String, String) -> Unit, onStop: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("desync_preferences", android.content.Context.MODE_PRIVATE) }

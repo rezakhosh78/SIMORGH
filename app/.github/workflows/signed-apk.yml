@@ -1,0 +1,99 @@
+name: Build signed SIMORGH APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v2.0.1*'
+      - 'V2.0.1*'
+
+permissions:
+  contents: read
+
+jobs:
+  signed-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build dependencies
+        run: |
+          sdkmanager --install 'platforms;android-36' 'build-tools;35.0.0' 'ndk;30.0.14904198' 'cmake;3.22.1'
+
+      - name: Select Gradle project
+        shell: bash
+        run: |
+          if [[ -f app/settings.gradle.kts && -f app/build.gradle.kts ]]; then
+            echo 'BUILD_DIR=app' >> "$GITHUB_ENV"
+          elif [[ -f settings.gradle.kts && -f build.gradle.kts ]]; then
+            echo 'BUILD_DIR=.' >> "$GITHUB_ENV"
+          else
+            echo 'SIMORGH Gradle project not found' >&2
+            exit 1
+          fi
+
+      - name: Build unsigned release APK
+        run: gradle --project-dir "$BUILD_DIR" clean assembleRelease --stacktrace
+
+      - name: Sign and verify release APK
+        shell: bash
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing GitHub Actions signing secret: $name" >&2
+              exit 1
+            fi
+          done
+          keystore="$RUNNER_TEMP/simorgh-release.jks"
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+
+          release_dir="$BUILD_DIR/build/outputs/apk/release"
+          unsigned_apk="$(find "$release_dir" -maxdepth 1 -type f -name '*-unsigned.apk' -print -quit)"
+          if [[ -z "$unsigned_apk" ]]; then
+            echo "Unsigned release APK not found in $release_dir" >&2
+            exit 1
+          fi
+
+          build_tools="$ANDROID_HOME/build-tools/35.0.0"
+          aligned_apk="$RUNNER_TEMP/simorgh-aligned.apk"
+          signed_apk="$GITHUB_WORKSPACE/SIMORGH-V2.0.1-arm64-v8a-signed.apk"
+          "$build_tools/zipalign" -p -f 4 "$unsigned_apk" "$aligned_apk"
+          "$build_tools/apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$RELEASE_KEY_ALIAS" \
+            --ks-pass env:RELEASE_STORE_PASSWORD \
+            --key-pass env:RELEASE_KEY_PASSWORD \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          "$build_tools/apksigner" verify --verbose --print-certs "$signed_apk"
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SIMORGH-V2.0.1-arm64-v8a-signed
+          path: SIMORGH-V2.0.1-arm64-v8a-signed.apk
+          if-no-files-found: error
