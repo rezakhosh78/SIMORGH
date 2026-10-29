@@ -5,10 +5,10 @@
 
 ## ⚠️ Donate
 
-USDT BEP20:
+TRON:
 
 ```text
-0xeaA77532878d92b2218690605DebD192cd4f018f
+TUnX9wBWzhD2AK9GqB9FJekKaxCvYJNh18
 ```
 https://nowpayments.io/donation/pingplas
 
