@@ -9,8 +9,8 @@ USDT BEP20:
 
 ```text
 0xeaA77532878d92b2218690605DebD192cd4f018f
-https://nowpayments.io/donation/pingplas
 ```
+https://nowpayments.io/donation/pingplas
 
 This README is based on the latest provided project version:
 
